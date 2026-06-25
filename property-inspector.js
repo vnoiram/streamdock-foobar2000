@@ -3,7 +3,7 @@
 
   var websocket = null;
   var context = null;
-  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', rating: 5 };
+  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', rating: 5, showProgress: true, searchQuery: '' };
 
   function sendSettings() {
     if (!websocket || websocket.readyState !== WebSocket.OPEN || !context) {
@@ -14,6 +14,8 @@
     settings.seekStepSeconds = Number(document.getElementById('seekStepSeconds').value) || 5;
     settings.playlistName = document.getElementById('playlistName').value.trim();
     settings.rating = Number(document.getElementById('rating').value) || 5;
+    settings.showProgress = document.getElementById('showProgress').checked;
+    settings.searchQuery = document.getElementById('searchQuery').value.trim();
     websocket.send(JSON.stringify({
       event: 'setGlobalSettings',
       context: context,
@@ -46,6 +48,8 @@
     document.getElementById('seekStepSeconds').value = settings.seekStepSeconds;
     document.getElementById('playlistName').value = settings.playlistName;
     document.getElementById('rating').value = settings.rating;
+    document.getElementById('showProgress').checked = settings.showProgress !== false && settings.showProgress !== 'false';
+    document.getElementById('searchQuery').value = settings.searchQuery || '';
   }
 
   window.connectElgatoStreamDeckSocket = function (port, uuid, registerEvent, info, actionInfo) {
@@ -69,6 +73,8 @@
     document.getElementById('seekStepSeconds').addEventListener('input', sendSettings);
     document.getElementById('playlistName').addEventListener('input', sendSettings);
     document.getElementById('rating').addEventListener('input', sendSettings);
+    document.getElementById('showProgress').addEventListener('change', sendSettings);
+    document.getElementById('searchQuery').addEventListener('input', sendSettings);
     document.getElementById('exportSettings').addEventListener('click', exportSettings);
     document.getElementById('importSettings').addEventListener('change', importSettings);
   });

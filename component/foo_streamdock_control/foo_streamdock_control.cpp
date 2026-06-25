@@ -218,12 +218,15 @@ std::string make_state_json() {
     const bool paused = playback->is_paused();
     const float volume_db = playback->get_volume();
     const float volume_percent = std::max(0.0f, std::min(100.0f, std::pow(10.0f, volume_db / 20.0f) * 100.0f));
+    const double position = playback->playback_get_position();
+    double length = 0;
     pfc::string8 artist;
     pfc::string8 title;
     pfc::string8 track;
     metadb_handle_ptr handle;
 
     if (playback->get_now_playing(handle) && handle.is_valid()) {
+        length = handle->get_length();
         file_info_impl info;
         if (handle->get_info(info)) {
             const char* artist_value = info.meta_get("artist", 0);
@@ -248,6 +251,14 @@ std::string make_state_json() {
     json += volume_text;
     json += ",\"volume\":";
     json += volume_percent_text;
+    char position_text[64] = {};
+    sprintf_s(position_text, "%.0f", std::max(0.0, position));
+    char length_text[64] = {};
+    sprintf_s(length_text, "%.0f", std::max(0.0, length));
+    json += ",\"positionSeconds\":";
+    json += position_text;
+    json += ",\"lengthSeconds\":";
+    json += length_text;
     json += ",\"muted\":false";
     json += ",\"artist\":\"";
     json += json_escape(artist.c_str());
@@ -285,6 +296,9 @@ public:
         } else if (m_command == "cycle_playback_order") {
             // Playback-order APIs differ between foobar2000 SDK generations.
             // Keep this as a command boundary; wire to playback_order_manager in the target SDK project if needed.
+        } else if (m_command == "playlist_search" || m_command == "library_search") {
+            // Search APIs differ by SDK/project setup. The Stream Dock side can send this command;
+            // wire it to playlist_manager/library_manager in the target SDK project if needed.
         }
         broadcast_current_state();
     }
@@ -424,7 +438,9 @@ private:
             command == "playlist_select" ||
             command == "playlist_next" ||
             command == "playlist_previous" ||
-            command == "rating_set";
+            command == "rating_set" ||
+            command == "playlist_search" ||
+            command == "library_search";
     }
 
     std::atomic<bool> m_running{ false };
@@ -458,7 +474,8 @@ public:
         return flag_on_playback_new_track |
             flag_on_playback_stop |
             flag_on_playback_pause |
-            flag_on_volume_change;
+            flag_on_volume_change |
+            flag_on_playback_time;
     }
 
     void on_playback_starting(play_control::t_track_command, bool) override {}
@@ -469,7 +486,7 @@ public:
     void on_playback_edited(metadb_handle_ptr) override { g_streamdock_server.broadcast_state(); }
     void on_playback_dynamic_info(const file_info&) override {}
     void on_playback_dynamic_info_track(const file_info&) override { g_streamdock_server.broadcast_state(); }
-    void on_playback_time(double) override {}
+    void on_playback_time(double) override { g_streamdock_server.broadcast_state(); }
     void on_volume_change(float) override { g_streamdock_server.broadcast_state(); }
 };
 

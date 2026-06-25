@@ -16,7 +16,7 @@
   var pluginUuid = null;
   var helperSocket = null;
   var reconnectTimer = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', rating: 5 };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', rating: 5, showProgress: true, searchQuery: '' };
   var contexts = {};
   var lastState = { connected: false };
 
@@ -100,7 +100,18 @@
     if (!artist && !title) {
       return lastState.playing ? 'Playing' : 'Stopped';
     }
-    return artist ? artist + '\n' + title : title;
+    var line = artist ? artist + '\n' + title : title;
+    if (globalSettings.showProgress && typeof lastState.positionSeconds === 'number' && typeof lastState.lengthSeconds === 'number' && lastState.lengthSeconds > 0) {
+      line += '\n' + formatTime(lastState.positionSeconds) + '/' + formatTime(lastState.lengthSeconds);
+    }
+    return line;
+  }
+
+  function formatTime(seconds) {
+    seconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    var minutes = Math.floor(seconds / 60);
+    var rest = seconds % 60;
+    return minutes + ':' + (rest < 10 ? '0' : '') + rest;
   }
 
   function formatVolume() {
@@ -181,7 +192,8 @@
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.playlist') {
-      if (!sendCommand('playlist_select', { name: globalSettings.playlistName })) {
+      var command = globalSettings.searchQuery ? 'playlist_search' : 'playlist_select';
+      if (!sendCommand(command, { name: globalSettings.playlistName, query: globalSettings.searchQuery })) {
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.rating') {

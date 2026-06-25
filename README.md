@@ -23,9 +23,11 @@ Initial actions:
 - Volume up/down
 - Mute
 - Now playing display
+- Now playing position/length display when the component reports timing
 - Seek by knob
 - Playback order command
 - Playlist command
+- Playlist/library search command boundary for SDK projects that wire it up
 - Rating command
 - Diagnostics action
 - Plugin-side `logMessage` diagnostics
@@ -39,7 +41,7 @@ ws://127.0.0.1:41920
 Expected component messages:
 
 - Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `volume_up`, `volume_down`, `mute`, `now_playing`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `rating_set`.
-- Component to Dock: `{ "event": "state", "payload": { "playing": true, "artist": "...", "title": "...", "volume": 50, "muted": false } }`.
+- Component to Dock: `{ "event": "state", "payload": { "playing": true, "artist": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "muted": false } }`.
 
 ## Repository Layout
 

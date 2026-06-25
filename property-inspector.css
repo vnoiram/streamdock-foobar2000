@@ -34,3 +34,13 @@ body {
   cursor: pointer;
   padding: 5px 10px;
 }
+
+.sdpi-checkbox {
+  accent-color: #4dd0e1;
+  flex: 0 0 auto;
+}
+
+.sdpi-status {
+  color: #c9c9c9;
+  flex: 1;
+}
