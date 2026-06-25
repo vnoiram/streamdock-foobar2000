@@ -15,6 +15,18 @@
       <input id="volumeStep" class="sdpi-item-value" type="number" min="1" max="20" value="2">
     </div>
     <div class="sdpi-item">
+      <div class="sdpi-item-label">Volume min</div>
+      <input id="minVolume" class="sdpi-item-value" type="number" min="0" max="100" value="0">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Volume max</div>
+      <input id="maxVolume" class="sdpi-item-value" type="number" min="0" max="100" value="100">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Invert knob</div>
+      <input id="invertKnob" class="sdpi-checkbox" type="checkbox">
+    </div>
+    <div class="sdpi-item">
       <div class="sdpi-item-label">Seek step sec</div>
       <input id="seekStepSeconds" class="sdpi-item-value" type="number" min="1" max="120" value="5">
     </div>
@@ -37,6 +49,10 @@
       <div class="sdpi-item-label">Progress</div>
       <input id="showProgress" class="sdpi-checkbox" type="checkbox" checked>
       <span class="sdpi-status">show position on now playing</span>
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Now template</div>
+      <input id="nowPlayingTemplate" class="sdpi-item-value" placeholder="{artist}\n{title}">
     </div>
     <div class="sdpi-item">
       <div class="sdpi-item-label">Search</div>

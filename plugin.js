@@ -16,7 +16,7 @@
   var pluginUuid = null;
   var helperSocket = null;
   var reconnectTimer = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, searchQuery: '', albumArtUrlTemplate: '', generatedImages: true };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
   var lastState = { connected: false };
 
@@ -85,7 +85,7 @@
       return 'Rate\n' + (lastState.rating || globalSettings.rating || 5);
     }
     if (action === 'local.streamdock.foobar2000.nowplaying') {
-      return formatNowPlaying();
+      return formatNowPlaying(context);
     }
     if (action === 'local.streamdock.foobar2000.volume') {
       return formatVolume();
@@ -102,6 +102,19 @@
   function formatNowPlaying() {
     var artist = lastState.artist || '';
     var title = lastState.title || lastState.track || '';
+    if (globalSettings.nowPlayingTemplate) {
+      return truncateTitle(globalSettings.nowPlayingTemplate.replace(/\{(artist|title|track|position|length|volume|playlist)\}/g, function (_, key) {
+        return {
+          artist: artist,
+          title: title,
+          track: lastState.track || '',
+          position: formatTime(lastState.positionSeconds),
+          length: formatTime(lastState.lengthSeconds),
+          volume: Math.round(Number(lastState.volume) || 0) + '%',
+          playlist: lastState.playlist || ''
+        }[key] || '';
+      }));
+    }
     if (!artist && !title) {
       return lastState.playing ? 'Playing' : 'Stopped';
     }
@@ -151,7 +164,8 @@
         .replace(/\{artist\}/g, encodeURIComponent(lastState.artist || ''))
         .replace(/\{title\}/g, encodeURIComponent(lastState.title || lastState.track || ''));
     }
-    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'STOP', lastState.artist || 'fb2k');
+    var fill = Number(lastState.lengthSeconds) > 0 ? Number(lastState.positionSeconds) / Number(lastState.lengthSeconds) * 100 : 0;
+    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'STOP', lastState.artist || 'fb2k', fill);
   }
 
   function actionImage(context) {
@@ -168,9 +182,12 @@
     return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'fb2k', '');
   }
 
-  function svgImage(background, foreground, main, sub) {
+  function svgImage(background, foreground, main, sub, fillPercent) {
+    var fill = Math.max(0, Math.min(100, Number(fillPercent) || 0));
+    var barWidth = Math.round(116 * fill / 100);
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">' +
       '<rect width="144" height="144" rx="20" fill="' + background + '"/>' +
+      '<rect x="14" y="124" width="' + barWidth + '" height="8" rx="4" fill="' + foreground + '" opacity="0.32"/>' +
       '<circle cx="72" cy="52" r="34" fill="' + foreground + '" opacity="0.16"/>' +
       '<text x="72" y="66" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="' + foreground + '">' + escapeSvg(main) + '</text>' +
       '<text x="72" y="101" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="' + foreground + '">' + escapeSvg(truncateImageText(sub)) + '</text>' +
@@ -272,6 +289,9 @@
 
   function handleDialRotate(message) {
     var ticks = Number(message.payload && (message.payload.ticks || message.payload.delta || message.payload.rotation)) || 0;
+    if (globalSettings.invertKnob === true || globalSettings.invertKnob === 'true') {
+      ticks = -ticks;
+    }
     if (ticks === 0) {
       return;
     }
@@ -304,9 +324,29 @@
       return;
     }
     var step = Number(globalSettings.volumeStep) || 2;
+    if (typeof lastState.volume === 'number') {
+      var nextVolume = clampVolume(Number(lastState.volume) + (ticks > 0 ? 1 : -1) * Math.abs(ticks) * step);
+      if (!sendCommand('set_volume_percent', { value: Math.round(nextVolume) })) {
+        showAlert(message.context);
+      }
+      return;
+    }
     if (!sendCommand(ticks > 0 ? 'volume_up' : 'volume_down', { amount: Math.abs(ticks) * step })) {
       showAlert(message.context);
     }
+  }
+
+  function clampVolume(value) {
+    var min = Number(globalSettings.minVolume);
+    var max = Number(globalSettings.maxVolume);
+    if (!Number.isFinite(min)) min = 0;
+    if (!Number.isFinite(max)) max = 100;
+    if (max < min) {
+      var tmp = max;
+      max = min;
+      min = tmp;
+    }
+    return Math.max(min, Math.min(max, Number(value) || 0));
   }
 
   function rememberContext(message) {

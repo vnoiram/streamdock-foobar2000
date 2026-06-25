@@ -539,6 +539,10 @@ public:
             for (int i = 0; i < m_amount; i++) playback->volume_up();
         } else if (m_command == "volume_down") {
             for (int i = 0; i < m_amount; i++) playback->volume_down();
+        } else if (m_command == "set_volume_percent") {
+            const float percent = std::max(0.0f, std::min(100.0f, static_cast<float>(m_value)));
+            const float db = percent <= 0.0f ? -100.0f : 20.0f * std::log10(percent / 100.0f);
+            playback->set_volume(db);
         } else if (m_command == "mute") {
             playback->volume_mute_toggle();
         } else if (m_command == "seek_delta") {
@@ -696,6 +700,7 @@ private:
             command == "previous" ||
             command == "volume_up" ||
             command == "volume_down" ||
+            command == "set_volume_percent" ||
             command == "mute" ||
             command == "seek_delta" ||
             command == "cycle_playback_order" ||

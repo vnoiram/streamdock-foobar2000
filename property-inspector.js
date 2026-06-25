@@ -3,7 +3,7 @@
 
   var websocket = null;
   var context = null;
-  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, searchQuery: '', albumArtUrlTemplate: '', generatedImages: true };
+  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
 
   function setStatus(text) {
     document.getElementById('status').textContent = text;
@@ -15,11 +15,15 @@
     }
     settings.endpoint = document.getElementById('endpoint').value.trim();
     settings.volumeStep = Number(document.getElementById('volumeStep').value) || 2;
+    settings.minVolume = Number(document.getElementById('minVolume').value) || 0;
+    settings.maxVolume = Number(document.getElementById('maxVolume').value) || 100;
+    settings.invertKnob = document.getElementById('invertKnob').checked;
     settings.seekStepSeconds = Number(document.getElementById('seekStepSeconds').value) || 5;
     settings.playlistName = document.getElementById('playlistName').value.trim();
     settings.playlistDialMode = document.getElementById('playlistDialMode').value;
     settings.rating = Number(document.getElementById('rating').value) || 5;
     settings.showProgress = document.getElementById('showProgress').checked;
+    settings.nowPlayingTemplate = document.getElementById('nowPlayingTemplate').value;
     settings.searchQuery = document.getElementById('searchQuery').value.trim();
     settings.albumArtUrlTemplate = document.getElementById('albumArtUrlTemplate').value.trim();
     settings.generatedImages = document.getElementById('generatedImages').checked;
@@ -72,11 +76,15 @@
     settings = Object.assign({}, settings, next || {});
     document.getElementById('endpoint').value = settings.endpoint;
     document.getElementById('volumeStep').value = settings.volumeStep;
+    document.getElementById('minVolume').value = settings.minVolume;
+    document.getElementById('maxVolume').value = settings.maxVolume;
+    document.getElementById('invertKnob').checked = settings.invertKnob === true || settings.invertKnob === 'true';
     document.getElementById('seekStepSeconds').value = settings.seekStepSeconds;
     document.getElementById('playlistName').value = settings.playlistName;
     document.getElementById('playlistDialMode').value = settings.playlistDialMode || 'playlist';
     document.getElementById('rating').value = settings.rating;
     document.getElementById('showProgress').checked = settings.showProgress !== false && settings.showProgress !== 'false';
+    document.getElementById('nowPlayingTemplate').value = settings.nowPlayingTemplate || '';
     document.getElementById('searchQuery').value = settings.searchQuery || '';
     document.getElementById('albumArtUrlTemplate').value = settings.albumArtUrlTemplate || '';
     document.getElementById('generatedImages').checked = settings.generatedImages !== false && settings.generatedImages !== 'false';
@@ -100,11 +108,15 @@
   window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('endpoint').addEventListener('input', sendSettings);
     document.getElementById('volumeStep').addEventListener('input', sendSettings);
+    document.getElementById('minVolume').addEventListener('input', sendSettings);
+    document.getElementById('maxVolume').addEventListener('input', sendSettings);
+    document.getElementById('invertKnob').addEventListener('change', sendSettings);
     document.getElementById('seekStepSeconds').addEventListener('input', sendSettings);
     document.getElementById('playlistName').addEventListener('input', sendSettings);
     document.getElementById('playlistDialMode').addEventListener('change', sendSettings);
     document.getElementById('rating').addEventListener('input', sendSettings);
     document.getElementById('showProgress').addEventListener('change', sendSettings);
+    document.getElementById('nowPlayingTemplate').addEventListener('input', sendSettings);
     document.getElementById('searchQuery').addEventListener('input', sendSettings);
     document.getElementById('albumArtUrlTemplate').addEventListener('input', sendSettings);
     document.getElementById('generatedImages').addEventListener('change', sendSettings);

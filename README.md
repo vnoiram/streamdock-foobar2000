@@ -30,6 +30,10 @@ Initial actions:
 - Playlist selection, playlist next/previous, and playlist-name search
 - Playlist track browsing: set `Playlist knob` to `Browse tracks`, rotate the Playlist action to choose a track in the active playlist, then press to play it.
 - Playback order cycling
+- Now Playing title template with `{artist}`, `{title}`, `{track}`, `{position}`, `{length}`, `{volume}`, and `{playlist}`
+- Generated Now Playing image progress bar when album art is not available
+- Invert knob direction
+- Min/max volume clamp with absolute component-side volume setting
 - Generated key images for playback, mute, volume, and offline states
 - Optional album-art URL template for Now Playing images, using `{artist}` and `{title}` placeholders
 - Local folder album art for Now Playing images. The component looks beside the playing file for `cover`, `folder`, `front`, or `album` images in JPG, PNG, or WebP format and sends a data URL to the plugin.
@@ -71,6 +75,8 @@ Package this repository root as the plugin directory, or copy these files into a
 - `icons/`
 
 The plugin defaults to `ws://127.0.0.1:41920`. Change the endpoint in the Property Inspector only if the component port changes.
+
+For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for the older playlist-switching behavior. `Now template` overrides the Now Playing title text; leave it blank for the built-in display.
 
 Build a distributable plugin folder:
 
