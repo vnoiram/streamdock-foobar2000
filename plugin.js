@@ -16,7 +16,7 @@
   var pluginUuid = null;
   var helperSocket = null;
   var reconnectTimer = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', rating: 5, showProgress: true, searchQuery: '' };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, searchQuery: '', albumArtUrlTemplate: '', generatedImages: true };
   var contexts = {};
   var lastState = { connected: false };
 
@@ -74,6 +74,11 @@
       return 'Order\n' + (lastState.playbackOrder || 'cycle');
     }
     if (action === 'local.streamdock.foobar2000.playlist') {
+      if (globalSettings.playlistDialMode === 'track') {
+        var count = Number(lastState.browseCount) || 0;
+        var index = Number(lastState.browseIndex) || 0;
+        return count ? 'Track ' + String(index + 1) + '/' + count + '\n' + truncateTitle(lastState.browseTrack || '') : 'Track\nempty';
+      }
       return 'List\n' + (lastState.playlist || globalSettings.playlistName || 'set');
     }
     if (action === 'local.streamdock.foobar2000.rating') {
@@ -121,12 +126,66 @@
     return 'Vol';
   }
 
+  function truncateTitle(value) {
+    value = String(value || '');
+    return value.length > 36 ? value.slice(0, 35) + '…' : value;
+  }
+
   function refreshTitles() {
     Object.keys(contexts).forEach(function (context) {
       setTitle(context, titleForContext(context));
-      if (contexts[context].action === 'local.streamdock.foobar2000.nowplaying' && lastState.image) {
-        setImage(context, lastState.image);
+      if (contexts[context].action === 'local.streamdock.foobar2000.nowplaying') {
+        setImage(context, nowPlayingImage());
+      } else if (globalSettings.generatedImages) {
+        setImage(context, actionImage(context));
       }
+    });
+  }
+
+  function nowPlayingImage() {
+    if (lastState.image) {
+      return lastState.image;
+    }
+    if (globalSettings.albumArtUrlTemplate) {
+      return globalSettings.albumArtUrlTemplate
+        .replace(/\{artist\}/g, encodeURIComponent(lastState.artist || ''))
+        .replace(/\{title\}/g, encodeURIComponent(lastState.title || lastState.track || ''));
+    }
+    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'STOP', lastState.artist || 'fb2k');
+  }
+
+  function actionImage(context) {
+    var action = contexts[context] && contexts[context].action;
+    if (!lastState.connected) {
+      return svgImage('#363b44', '#aeb7c2', 'fb2k', 'OFF');
+    }
+    if (action === 'local.streamdock.foobar2000.mute') {
+      return svgImage(lastState.muted ? '#742a2a' : '#2d3748', '#ffffff', lastState.muted ? 'MUTE' : 'AUD', '');
+    }
+    if (action === 'local.streamdock.foobar2000.volume') {
+      return svgImage('#234e52', '#ffffff', String(Math.round(lastState.volume || 0)), 'VOL');
+    }
+    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'fb2k', '');
+  }
+
+  function svgImage(background, foreground, main, sub) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">' +
+      '<rect width="144" height="144" rx="20" fill="' + background + '"/>' +
+      '<circle cx="72" cy="52" r="34" fill="' + foreground + '" opacity="0.16"/>' +
+      '<text x="72" y="66" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="' + foreground + '">' + escapeSvg(main) + '</text>' +
+      '<text x="72" y="101" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="' + foreground + '">' + escapeSvg(truncateImageText(sub)) + '</text>' +
+      '</svg>';
+    return 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
+  }
+
+  function truncateImageText(value) {
+    value = String(value || '');
+    return value.length > 12 ? value.slice(0, 12) : value;
+  }
+
+  function escapeSvg(value) {
+    return String(value || '').replace(/[&<>"]/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch];
     });
   }
 
@@ -192,6 +251,12 @@
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.playlist') {
+      if (globalSettings.playlistDialMode === 'track') {
+        if (!sendCommand('playlist_play_selected')) {
+          showAlert(context);
+        }
+        return;
+      }
       var command = globalSettings.searchQuery ? 'playlist_search' : 'playlist_select';
       if (!sendCommand(command, { name: globalSettings.playlistName, query: globalSettings.searchQuery })) {
         showAlert(context);
@@ -219,6 +284,12 @@
       return;
     }
     if (action === 'local.streamdock.foobar2000.playlist') {
+      if (globalSettings.playlistDialMode === 'track') {
+        if (!sendCommand('playlist_browse_delta', { delta: ticks })) {
+          showAlert(message.context);
+        }
+        return;
+      }
       if (!sendCommand(ticks > 0 ? 'playlist_next' : 'playlist_previous')) {
         showAlert(message.context);
       }

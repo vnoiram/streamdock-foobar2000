@@ -23,6 +23,13 @@
       <input id="playlistName" class="sdpi-item-value" placeholder="Playlist name">
     </div>
     <div class="sdpi-item">
+      <div class="sdpi-item-label">Playlist knob</div>
+      <select id="playlistDialMode" class="sdpi-item-value">
+        <option value="playlist">Switch playlists</option>
+        <option value="track">Browse tracks</option>
+      </select>
+    </div>
+    <div class="sdpi-item">
       <div class="sdpi-item-label">Rating</div>
       <input id="rating" class="sdpi-item-value" type="number" min="1" max="5" value="5">
     </div>
@@ -36,10 +43,22 @@
       <input id="searchQuery" class="sdpi-item-value" placeholder="playlist/library query">
     </div>
     <div class="sdpi-item">
+      <div class="sdpi-item-label">Art URL</div>
+      <input id="albumArtUrlTemplate" class="sdpi-item-value" placeholder="https://example/art?artist={artist}&title={title}">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Images</div>
+      <input id="generatedImages" class="sdpi-checkbox" type="checkbox" checked>
+      <span class="sdpi-status">show generated/album art images</span>
+    </div>
+    <div class="sdpi-item">
       <div class="sdpi-item-label">Settings</div>
+      <button id="copySettings" class="sdpi-button" type="button">Copy</button>
+      <button id="pasteSettings" class="sdpi-button" type="button">Paste</button>
       <button id="exportSettings" class="sdpi-button" type="button">Export</button>
       <label class="sdpi-button" for="importSettings">Import</label>
       <input id="importSettings" type="file" accept="application/json" hidden>
+      <span id="status" class="sdpi-status">ready</span>
     </div>
   </body>
 </html>

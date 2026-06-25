@@ -27,10 +27,16 @@ Initial actions:
 - Seek by knob
 - Playback order command
 - Playlist command
-- Playlist/library search command boundary for SDK projects that wire it up
-- Rating command
+- Playlist selection, playlist next/previous, and playlist-name search
+- Playlist track browsing: set `Playlist knob` to `Browse tracks`, rotate the Playlist action to choose a track in the active playlist, then press to play it.
+- Playback order cycling
+- Generated key images for playback, mute, volume, and offline states
+- Optional album-art URL template for Now Playing images, using `{artist}` and `{title}` placeholders
+- Local folder album art for Now Playing images. The component looks beside the playing file for `cover`, `folder`, `front`, or `album` images in JPG, PNG, or WebP format and sends a data URL to the plugin.
+- Runtime per-track rating command for Stream Dock display
 - Diagnostics action
 - Plugin-side `logMessage` diagnostics
+- Property Inspector `Copy` / `Paste` for quickly duplicating global foobar2000 settings between keys
 
 Default component endpoint:
 
@@ -40,8 +46,8 @@ ws://127.0.0.1:41920
 
 Expected component messages:
 
-- Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `volume_up`, `volume_down`, `mute`, `now_playing`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `rating_set`.
-- Component to Dock: `{ "event": "state", "payload": { "playing": true, "artist": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "muted": false } }`.
+- Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `volume_up`, `volume_down`, `mute`, `now_playing`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `playlist_search`, `library_search`, `playlist_browse_delta`, `playlist_play_selected`, `rating_set`.
+- Component to Dock: `{ "event": "state", "payload": { "playing": true, "artist": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "playlist": "Default", "browseTrack": "...", "browseIndex": 0, "browseCount": 20, "playbackOrder": "Default", "rating": 5, "muted": false } }`.
 
 ## Repository Layout
 
@@ -92,6 +98,8 @@ The component source lives in `component/foo_streamdock_control/`.
 
 Build it inside a normal foobar2000 SDK component project and link `ws2_32.lib`, `bcrypt.lib`, and `crypt32.lib`. The component listens only on `127.0.0.1:41920`, accepts the allowlisted commands above, and pushes `state` messages when playback or volume changes.
 
+`rating_set` is intentionally runtime-only: it stores the selected rating in the component process for the currently playing track and reports it back to Stream Dock. It does not write file tags or Playback Statistics metadata.
+
 ### Build
 
 Prerequisites:
@@ -122,3 +130,7 @@ npm run check
 ```
 
 The foobar2000 component cannot be built in a non-Windows environment without the foobar2000 SDK.
+
+## Key Images
+
+The Stream Dock plugin uses `setImage` for generated state images. If the component sends an `image` field, that image is used for Now Playing. The component searches the playing file's folder for common cover filenames such as `cover.jpg`, `folder.jpg`, `front.png`, and `album.webp` up to 2 MB. Otherwise, `Art URL` can point to an external album-art service and may use `{artist}` and `{title}` placeholders. When no image source is available, the plugin generates a simple playback-state image.
