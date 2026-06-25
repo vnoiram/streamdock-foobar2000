@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="property-inspector.css">
+    <script src="property-inspector.js"></script>
+  </head>
+  <body>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Endpoint</div>
+      <input id="endpoint" class="sdpi-item-value" value="ws://127.0.0.1:41920">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Volume step</div>
+      <input id="volumeStep" class="sdpi-item-value" type="number" min="1" max="20" value="2">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Seek step sec</div>
+      <input id="seekStepSeconds" class="sdpi-item-value" type="number" min="1" max="120" value="5">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Playlist</div>
+      <input id="playlistName" class="sdpi-item-value" placeholder="Playlist name">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Rating</div>
+      <input id="rating" class="sdpi-item-value" type="number" min="1" max="5" value="5">
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Settings</div>
+      <button id="exportSettings" class="sdpi-button" type="button">Export</button>
+      <label class="sdpi-button" for="importSettings">Import</label>
+      <input id="importSettings" type="file" accept="application/json" hidden>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.sdPlugin/
+*.dll
+*.exp
+*.lib
+*.obj
+*.pdb
+bin/
+obj/

@@ -1,0 +1,125 @@
+{
+  "Name": "Stream Dock foobar2000",
+  "Description": "Control foobar2000 through a local foo_streamdock_control component.",
+  "Author": "local",
+  "Version": "0.2.0",
+  "CodePath": "plugin.html",
+  "Icon": "icons/plugin",
+  "Category": "Audio",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "local.streamdock.foobar2000.playpause",
+      "Name": "Play/Pause",
+      "Tooltip": "Toggle foobar2000 playback.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Play", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.stop",
+      "Name": "Stop",
+      "Tooltip": "Stop foobar2000 playback.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Stop", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.previous",
+      "Name": "Previous",
+      "Tooltip": "Go to the previous foobar2000 track.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Prev", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.next",
+      "Name": "Next",
+      "Tooltip": "Go to the next foobar2000 track.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Next", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.volume",
+      "Name": "Volume",
+      "Tooltip": "Adjust foobar2000 volume with a knob.",
+      "Controllers": ["Knob"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Vol", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.mute",
+      "Name": "Mute",
+      "Tooltip": "Toggle foobar2000 mute.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Mute", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.nowplaying",
+      "Name": "Now Playing",
+      "Tooltip": "Show current foobar2000 track.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Now", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.seek",
+      "Name": "Seek",
+      "Tooltip": "Seek foobar2000 playback with a knob.",
+      "Controllers": ["Knob"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Seek", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.playbackorder",
+      "Name": "Playback Order",
+      "Tooltip": "Cycle foobar2000 playback order.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Order", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.playlist",
+      "Name": "Playlist",
+      "Tooltip": "Switch foobar2000 playlist.",
+      "Controllers": ["Keypad", "Knob"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "List", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.rating",
+      "Name": "Rating",
+      "Tooltip": "Set rating for the current foobar2000 track.",
+      "Controllers": ["Keypad", "Knob"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Rate", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
+      "UUID": "local.streamdock.foobar2000.diagnostics",
+      "Name": "Diagnostics",
+      "Tooltip": "Show foobar2000 Stream Dock connection diagnostics.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/plugin",
+      "States": [{ "Title": "Diag", "Image": "icons/plugin" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    }
+  ]
+}
