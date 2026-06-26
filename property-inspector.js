@@ -4,6 +4,7 @@
   var websocket = null;
   var context = null;
   var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'playlistName', 'playlistDialMode', 'rating', 'showProgress', 'nowPlayingTemplate', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
 
   function setStatus(text) {
     document.getElementById('status').textContent = text;
@@ -32,6 +33,31 @@
       context: context,
       payload: settings
     }));
+    renderEndpointStatus();
+  }
+
+  function renderEndpointStatus() {
+    var status = document.getElementById('endpointStatus');
+    if (!status) return;
+    var endpoint = document.getElementById('endpoint').value.trim();
+    if (!endpoint) {
+      status.textContent = 'missing component endpoint';
+      return;
+    }
+    if (!/^wss?:\/\//i.test(endpoint)) {
+      status.textContent = 'invalid WebSocket endpoint';
+      return;
+    }
+    status.textContent = isLoopbackEndpoint(endpoint) ? 'localhost component' : 'remote component: control leaves this PC';
+  }
+
+  function isLoopbackEndpoint(endpoint) {
+    try {
+      var url = new URL(endpoint);
+      return ['localhost', '127.0.0.1', '::1', '[::1]'].indexOf(url.hostname) !== -1;
+    } catch (error) {
+      return false;
+    }
   }
 
   function exportSettings() {
@@ -73,7 +99,7 @@
   }
 
   function applySettings(next) {
-    settings = Object.assign({}, settings, next || {});
+    settings = mergeKnownSettings(mergeKnownSettings({}, settings), next || {});
     document.getElementById('endpoint').value = settings.endpoint;
     document.getElementById('volumeStep').value = settings.volumeStep;
     document.getElementById('minVolume').value = settings.minVolume;
@@ -88,6 +114,16 @@
     document.getElementById('searchQuery').value = settings.searchQuery || '';
     document.getElementById('albumArtUrlTemplate').value = settings.albumArtUrlTemplate || '';
     document.getElementById('generatedImages').checked = settings.generatedImages !== false && settings.generatedImages !== 'false';
+    renderEndpointStatus();
+  }
+
+  function mergeKnownSettings(target, source) {
+    SETTING_KEYS.forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        target[key] = source[key];
+      }
+    });
+    return target;
   }
 
   window.connectElgatoStreamDeckSocket = function (port, uuid, registerEvent, info, actionInfo) {
@@ -124,5 +160,6 @@
     document.getElementById('pasteSettings').addEventListener('click', pasteSettings);
     document.getElementById('exportSettings').addEventListener('click', exportSettings);
     document.getElementById('importSettings').addEventListener('change', importSettings);
+    renderEndpointStatus();
   });
 }());

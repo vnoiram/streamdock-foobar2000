@@ -76,6 +76,8 @@ Package this repository root as the plugin directory, or copy these files into a
 
 The plugin defaults to `ws://127.0.0.1:41920`. Change the endpoint in the Property Inspector only if the component port changes.
 
+The Property Inspector warns when the component endpoint is not localhost because playback commands and now-playing data will be sent to that endpoint. The bundled component is designed to listen only on `127.0.0.1`.
+
 For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for the older playlist-switching behavior. `Now template` overrides the Now Playing title text; leave it blank for the built-in display.
 
 Build a distributable plugin folder:
