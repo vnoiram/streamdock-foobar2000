@@ -98,6 +98,56 @@
     });
   }
 
+  function previewSearch() {
+    sendSettings();
+    var mode = settings.playlistDialMode === 'track' ? 'track browse' : 'playlist switch';
+    var target = settings.searchQuery || settings.playlistName || 'active playlist';
+    setStatus(mode + ': ' + target);
+  }
+
+  function diagnoseSettings() {
+    sendSettings();
+    var issues = [];
+    if (!settings.endpoint) issues.push('missing endpoint');
+    if (!/^wss?:\/\//i.test(settings.endpoint)) issues.push('invalid endpoint');
+    if (!isLoopbackEndpoint(settings.endpoint)) issues.push('remote component');
+    if (Number(settings.maxVolume) < Number(settings.minVolume)) issues.push('volume range reversed');
+    if (issues.length) {
+      setStatus(issues.join(', '));
+      return;
+    }
+    var socket;
+    var timer;
+    try {
+      socket = new WebSocket(settings.endpoint);
+      timer = setTimeout(function () {
+        setStatus('component timeout');
+        socket.close();
+      }, 2500);
+      socket.onopen = function () {
+        socket.send(JSON.stringify({ command: 'now_playing' }));
+      };
+      socket.onmessage = function () {
+        clearTimeout(timer);
+        setStatus('component ok');
+        socket.close();
+      };
+      socket.onerror = function () {
+        clearTimeout(timer);
+        setStatus('component offline');
+      };
+    } catch (error) {
+      clearTimeout(timer);
+      setStatus('component offline');
+    }
+  }
+
+  function resetSettings() {
+    applySettings({ endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 });
+    sendSettings();
+    setStatus('settings reset');
+  }
+
   function applySettings(next) {
     settings = mergeKnownSettings(mergeKnownSettings({}, settings), next || {});
     document.getElementById('endpoint').value = settings.endpoint;
@@ -157,6 +207,9 @@
     document.getElementById('albumArtUrlTemplate').addEventListener('input', sendSettings);
     document.getElementById('generatedImages').addEventListener('change', sendSettings);
     document.getElementById('copySettings').addEventListener('click', copySettings);
+    document.getElementById('previewSearch').addEventListener('click', previewSearch);
+    document.getElementById('diagnoseSettings').addEventListener('click', diagnoseSettings);
+    document.getElementById('resetSettings').addEventListener('click', resetSettings);
     document.getElementById('pasteSettings').addEventListener('click', pasteSettings);
     document.getElementById('exportSettings').addEventListener('click', exportSettings);
     document.getElementById('importSettings').addEventListener('change', importSettings);

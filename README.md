@@ -41,6 +41,7 @@ Initial actions:
 - Diagnostics action
 - Plugin-side `logMessage` diagnostics
 - Property Inspector `Copy` / `Paste` for quickly duplicating global foobar2000 settings between keys
+- Property Inspector component `Diagnose`, search/playlist `Preview`, endpoint warning, and `Reset` for safe defaults
 
 Default component endpoint:
 
