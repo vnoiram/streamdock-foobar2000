@@ -43,6 +43,15 @@
       </select>
     </div>
     <div class="sdpi-item">
+      <div class="sdpi-item-label">Track press</div>
+      <select id="trackAction" class="sdpi-item-value">
+        <option value="play">Play</option>
+        <option value="queue">Queue</option>
+        <option value="next">Play next</option>
+        <option value="append">Append</option>
+      </select>
+    </div>
+    <div class="sdpi-item">
       <div class="sdpi-item-label">Rating</div>
       <input id="rating" class="sdpi-item-value" type="number" min="1" max="5" value="5">
     </div>
@@ -76,6 +85,7 @@
       <button id="resetSettings" class="sdpi-button" type="button">Reset</button>
       <button id="pasteSettings" class="sdpi-button" type="button">Paste</button>
       <button id="exportSettings" class="sdpi-button" type="button">Export</button>
+      <button id="copyDiagnostics" class="sdpi-button" type="button">Log</button>
       <label class="sdpi-button" for="importSettings">Import</label>
       <input id="importSettings" type="file" accept="application/json" hidden>
       <span id="status" class="sdpi-status">ready</span>

@@ -3,11 +3,12 @@
 
   var websocket = null;
   var context = null;
-  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
-  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'playlistName', 'playlistDialMode', 'rating', 'showProgress', 'nowPlayingTemplate', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
+  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'playlistName', 'playlistDialMode', 'trackAction', 'rating', 'showProgress', 'nowPlayingTemplate', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
 
   function setStatus(text) {
     document.getElementById('status').textContent = text;
+    appendDiagnostics(text);
   }
 
   function sendSettings() {
@@ -22,6 +23,7 @@
     settings.seekStepSeconds = Number(document.getElementById('seekStepSeconds').value) || 5;
     settings.playlistName = document.getElementById('playlistName').value.trim();
     settings.playlistDialMode = document.getElementById('playlistDialMode').value;
+    settings.trackAction = document.getElementById('trackAction').value;
     settings.rating = Number(document.getElementById('rating').value) || 5;
     settings.showProgress = document.getElementById('showProgress').checked;
     settings.nowPlayingTemplate = document.getElementById('nowPlayingTemplate').value;
@@ -62,7 +64,7 @@
 
   function exportSettings() {
     sendSettings();
-    var blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    var blob = new Blob([JSON.stringify(backupPayload(), null, 2)], { type: 'application/json' });
     var link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = 'streamdock-foobar2000-settings.json';
@@ -74,14 +76,14 @@
     var file = event.target.files && event.target.files[0];
     if (!file) return;
     file.text().then(function (text) {
-      applySettings(JSON.parse(text));
+      applySettings(settingsFromImport(JSON.parse(text)));
       sendSettings();
     });
   }
 
   function copySettings() {
     sendSettings();
-    navigator.clipboard.writeText(JSON.stringify(settings, null, 2)).then(function () {
+    navigator.clipboard.writeText(JSON.stringify(backupPayload(), null, 2)).then(function () {
       setStatus('settings copied');
     }).catch(function () {
       setStatus('copy failed');
@@ -90,7 +92,7 @@
 
   function pasteSettings() {
     navigator.clipboard.readText().then(function (text) {
-      applySettings(JSON.parse(text));
+      applySettings(settingsFromImport(JSON.parse(text)));
       sendSettings();
       setStatus('settings pasted');
     }).catch(function () {
@@ -143,7 +145,7 @@
   }
 
   function resetSettings() {
-    applySettings({ endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 });
+    applySettings({ endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 });
     sendSettings();
     setStatus('settings reset');
   }
@@ -158,6 +160,7 @@
     document.getElementById('seekStepSeconds').value = settings.seekStepSeconds;
     document.getElementById('playlistName').value = settings.playlistName;
     document.getElementById('playlistDialMode').value = settings.playlistDialMode || 'playlist';
+    document.getElementById('trackAction').value = settings.trackAction || 'play';
     document.getElementById('rating').value = settings.rating;
     document.getElementById('showProgress').checked = settings.showProgress !== false && settings.showProgress !== 'false';
     document.getElementById('nowPlayingTemplate').value = settings.nowPlayingTemplate || '';
@@ -174,6 +177,53 @@
       }
     });
     return target;
+  }
+
+  function backupPayload() {
+    return {
+      type: 'streamdock-plugin-backup',
+      plugin: 'streamdock-foobar2000',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      settings: settings
+    };
+  }
+
+  function settingsFromImport(imported) {
+    if (imported && imported.type === 'streamdock-plugin-backup') {
+      return imported.settings || {};
+    }
+    return imported || {};
+  }
+
+  function diagnosticsKey() {
+    return 'streamdock-foobar2000:diagnostics';
+  }
+
+  function diagnosticsLog() {
+    try {
+      return JSON.parse(localStorage.getItem(diagnosticsKey()) || '[]');
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function appendDiagnostics(text) {
+    try {
+      var items = diagnosticsLog();
+      items.unshift({ time: new Date().toISOString(), message: String(text || '') });
+      localStorage.setItem(diagnosticsKey(), JSON.stringify(items.slice(0, 50)));
+    } catch (error) {
+      // localStorage can be disabled in some plugin runtimes.
+    }
+  }
+
+  function copyDiagnostics() {
+    navigator.clipboard.writeText(JSON.stringify(diagnosticsLog(), null, 2)).then(function () {
+      setStatus('diagnostics copied');
+    }).catch(function () {
+      setStatus('diagnostics copy failed');
+    });
   }
 
   window.connectElgatoStreamDeckSocket = function (port, uuid, registerEvent, info, actionInfo) {
@@ -200,6 +250,7 @@
     document.getElementById('seekStepSeconds').addEventListener('input', sendSettings);
     document.getElementById('playlistName').addEventListener('input', sendSettings);
     document.getElementById('playlistDialMode').addEventListener('change', sendSettings);
+    document.getElementById('trackAction').addEventListener('change', sendSettings);
     document.getElementById('rating').addEventListener('input', sendSettings);
     document.getElementById('showProgress').addEventListener('change', sendSettings);
     document.getElementById('nowPlayingTemplate').addEventListener('input', sendSettings);
@@ -212,6 +263,7 @@
     document.getElementById('resetSettings').addEventListener('click', resetSettings);
     document.getElementById('pasteSettings').addEventListener('click', pasteSettings);
     document.getElementById('exportSettings').addEventListener('click', exportSettings);
+    document.getElementById('copyDiagnostics').addEventListener('click', copyDiagnostics);
     document.getElementById('importSettings').addEventListener('change', importSettings);
     renderEndpointStatus();
   });

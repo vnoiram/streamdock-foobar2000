@@ -16,7 +16,7 @@
   var pluginUuid = null;
   var helperSocket = null;
   var reconnectTimer = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
   var lastState = { connected: false };
 
@@ -269,7 +269,7 @@
       }
     } else if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
-        if (!sendCommand('playlist_play_selected')) {
+        if (!sendCommand(trackCommand(globalSettings.trackAction))) {
           showAlert(context);
         }
         return;
@@ -285,6 +285,13 @@
     } else if (action === 'local.streamdock.foobar2000.diagnostics') {
       setTitle(context, lastState.connected ? 'fb2k\nconnected' : 'fb2k\noffline');
     }
+  }
+
+  function trackCommand(action) {
+    if (action === 'queue') return 'playlist_queue_selected';
+    if (action === 'next') return 'playlist_play_next_selected';
+    if (action === 'append') return 'playlist_append_selected';
+    return 'playlist_play_selected';
   }
 
   function handleDialRotate(message) {
