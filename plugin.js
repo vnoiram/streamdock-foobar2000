@@ -274,7 +274,7 @@
         }
         return;
       }
-      var command = globalSettings.searchQuery ? 'playlist_search' : 'playlist_select';
+      command = globalSettings.searchQuery ? 'playlist_search' : 'playlist_select';
       if (!sendCommand(command, { name: globalSettings.playlistName, query: globalSettings.searchQuery })) {
         showAlert(context);
       }
