@@ -16,6 +16,8 @@
   var pluginUuid = null;
   var helperSocket = null;
   var reconnectTimer = null;
+  var reconnectDelay = 2000;
+  var pendingRating = null;
   var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
   var lastState = { connected: false };
@@ -82,7 +84,8 @@
       return 'List\n' + (lastState.playlist || globalSettings.playlistName || 'set');
     }
     if (action === 'local.streamdock.foobar2000.rating') {
-      return 'Rate\n' + (lastState.rating || globalSettings.rating || 5);
+      var r = Math.max(0, Math.min(5, Math.round(Number(pendingRating !== null ? pendingRating : (lastState.rating || globalSettings.rating || 5)))));
+      return 'Rate\n' + ratingStars(r);
     }
     if (action === 'local.streamdock.foobar2000.nowplaying') {
       return formatNowPlaying(context);
@@ -103,7 +106,7 @@
     var artist = lastState.artist || '';
     var title = lastState.title || lastState.track || '';
     if (globalSettings.nowPlayingTemplate) {
-      return truncateTitle(globalSettings.nowPlayingTemplate.replace(/\{(artist|title|track|position|length|volume|playlist)\}/g, function (_, key) {
+      return truncateTitle(String(globalSettings.nowPlayingTemplate).replace(/\{(artist|title|track|position|length|volume|playlist)\}/g, function (_, key) {
         return {
           artist: artist,
           title: title,
@@ -137,6 +140,11 @@
       return 'Vol\n' + Math.round(lastState.volume) + '%';
     }
     return 'Vol';
+  }
+
+  function ratingStars(value) {
+    var n = Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
+    return '★'.repeat(n) + '☆'.repeat(5 - n);
   }
 
   function truncateTitle(value) {
@@ -228,6 +236,7 @@
 
     helperSocket.onopen = function () {
       lastState.connected = true;
+      reconnectDelay = 2000;
       refreshTitles();
       sendCommand('now_playing');
     };
@@ -236,6 +245,9 @@
       var message = parseJson(event.data, {});
       if (message.event === 'state' || message.type === 'state') {
         lastState = Object.assign({}, lastState, message.payload || message.state || {}, { connected: true });
+        if (lastState.rating !== undefined) {
+          pendingRating = null;
+        }
         refreshTitles();
       }
       if (message.event === 'error' || message.type === 'error') {
@@ -249,7 +261,10 @@
       lastState.connected = false;
       logMessage('component connection closed');
       refreshTitles();
-      reconnectTimer = setTimeout(connectHelper, 2000);
+      clearTimeout(reconnectTimer);
+      var delay = reconnectDelay;
+      reconnectDelay = Math.min(30000, reconnectDelay * 2);
+      reconnectTimer = setTimeout(connectHelper, delay);
     };
 
     helperSocket.onerror = function () {
@@ -279,7 +294,10 @@
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.rating') {
-      if (!sendCommand('rating_set', { value: Number(globalSettings.rating) || 5 })) {
+      var ratingVal = Math.max(1, Math.min(5, Number(pendingRating !== null ? pendingRating : (globalSettings.rating || 5))));
+      pendingRating = ratingVal;
+      if (!sendCommand('rating_set', { value: ratingVal })) {
+        pendingRating = null;
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.diagnostics') {
@@ -323,10 +341,15 @@
       return;
     }
     if (action === 'local.streamdock.foobar2000.rating') {
-      var nextRating = Math.max(1, Math.min(5, (Number(lastState.rating) || Number(globalSettings.rating) || 5) + ticks));
+      var currentRating = pendingRating !== null ? pendingRating : (Number(lastState.rating) || Number(globalSettings.rating) || 5);
+      var nextRating = Math.max(1, Math.min(5, currentRating + ticks));
+      pendingRating = nextRating;
       globalSettings.rating = nextRating;
       if (!sendCommand('rating_set', { value: nextRating })) {
+        pendingRating = null;
         showAlert(message.context);
+      } else {
+        refreshTitles();
       }
       return;
     }
