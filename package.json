@@ -5,6 +5,7 @@
   "scripts": {
     "check": "node --check plugin.js && node --check property-inspector.js && node --check scripts/package-plugin.js && node -e \"JSON.parse(require('fs').readFileSync('manifest.json','utf8'))\"",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "install:local": "powershell -ExecutionPolicy Bypass -File scripts/install-local.ps1",
     "package": "npm run check && node scripts/package-plugin.js",
     "release:zip": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
   }

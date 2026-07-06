@@ -12,7 +12,8 @@ if (Test-Path $Zip) { Remove-Item $Zip -Force }
 
 Compress-Archive -Path @(
   "dist/stream-dock-foobar2000.sdPlugin",
-  "component/foo_streamdock_control"
+  "component/foo_streamdock_control",
+  "scripts/install-local.ps1"
 ) -DestinationPath $Zip
 
 Write-Host "Wrote $Zip"

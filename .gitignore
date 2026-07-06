@@ -8,3 +8,7 @@ dist/
 *.pdb
 bin/
 obj/
+.env
+.env.*
+!.env.example
+*.log

@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+([-.+][0-9A-Za-z.-]+)?$') {
+            throw "Release must run from a semver tag like v0.2.0; got '$tag'."
+          }
+          $version = $tag.Substring(1)
+          $manifest = Get-Content "manifest.json" -Raw | ConvertFrom-Json
+          $package = Get-Content "package.json" -Raw | ConvertFrom-Json
+          if ($manifest.Version -ne $version) {
+            throw "manifest.json Version '$($manifest.Version)' does not match tag '$version'."
+          }
+          if ($package.version -ne $version) {
+            throw "package.json version '$($package.version)' does not match tag '$version'."
+          }
+
+      - name: Check
+        run: npm run check
+
+      - name: Build release zip
+        shell: pwsh
+        run: npm run release:zip
+
+      - name: Verify release assets
+        shell: pwsh
+        run: |
+          $assets = Get-ChildItem "dist/release/*.zip"
+          if ($assets.Count -ne 1) {
+            throw "Expected exactly one release zip, found $($assets.Count)."
+          }
+          $assets | Format-Table Name, Length
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: streamdock-foobar2000-${{ github.ref_name }}
+          path: dist/release/*.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/release/*.zip
+          generate_release_notes: true
