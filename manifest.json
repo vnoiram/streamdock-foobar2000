@@ -2,7 +2,7 @@
   "Name": "Stream Dock foobar2000",
   "Description": "Control foobar2000 through a local foo_streamdock_control component.",
   "Author": "local",
-  "Version": "0.2.2",
+  "Version": "0.2.3",
   "CodePath": "plugin.html",
   "Icon": "icons/plugin",
   "Category": "Foobar2000-Control",

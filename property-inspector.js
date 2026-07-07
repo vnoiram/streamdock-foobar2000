@@ -3,8 +3,18 @@
 
   var websocket = null;
   var context = null;
+  var currentAction = '';
   var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'playlistName', 'playlistDialMode', 'trackAction', 'rating', 'showProgress', 'nowPlayingTemplate', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
+  var COMMON_FIELDS = ['endpoint', 'generatedImages', 'copySettings', 'diagnoseSettings', 'resetSettings', 'pasteSettings', 'exportSettings', 'copyDiagnostics', 'importSettings'];
+  var ACTION_FIELDS = {
+    'local.streamdock.foobar2000.volume': ['volumeStep', 'minVolume', 'maxVolume', 'invertKnob'],
+    'local.streamdock.foobar2000.seek': ['seekStepSeconds', 'invertKnob'],
+    'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery', 'previewSearch'],
+    'local.streamdock.foobar2000.rating': ['rating', 'invertKnob'],
+    'local.streamdock.foobar2000.nowplaying': ['showProgress', 'nowPlayingTemplate', 'albumArtUrlTemplate'],
+    'local.streamdock.foobar2000.diagnostics': ['diagnoseSettings', 'copyDiagnostics']
+  };
 
   function setStatus(text) {
     document.getElementById('status').textContent = text;
@@ -226,8 +236,42 @@
     });
   }
 
+  function rowFor(id) {
+    var element = document.getElementById(id);
+    while (element && element !== document.body) {
+      if (element.classList && element.classList.contains('sdpi-item')) return element;
+      element = element.parentNode;
+    }
+    return null;
+  }
+
+  function setFieldVisible(id, visible) {
+    var row = rowFor(id);
+    if (row) row.classList.toggle('is-hidden', !visible);
+  }
+
+  function applyVisibility() {
+    var visible = {};
+    var actionFields = ACTION_FIELDS[currentAction];
+    if (!currentAction || !actionFields) {
+      SETTING_KEYS.concat(['copySettings', 'previewSearch', 'diagnoseSettings', 'resetSettings', 'pasteSettings', 'exportSettings', 'copyDiagnostics', 'importSettings']).forEach(function (id) {
+        setFieldVisible(id, true);
+      });
+      return;
+    }
+    COMMON_FIELDS.concat(actionFields).forEach(function (id) {
+      visible[id] = true;
+    });
+    SETTING_KEYS.concat(['copySettings', 'previewSearch', 'diagnoseSettings', 'resetSettings', 'pasteSettings', 'exportSettings', 'copyDiagnostics', 'importSettings']).forEach(function (id) {
+      setFieldVisible(id, !!visible[id]);
+    });
+  }
+
   window.connectElgatoStreamDeckSocket = function (port, uuid, registerEvent, info, actionInfo) {
+    var parsedActionInfo = JSON.parse(actionInfo || '{}');
     context = uuid;
+    currentAction = parsedActionInfo.action || '';
+    applyVisibility();
     websocket = new WebSocket('ws://127.0.0.1:' + port);
     websocket.onopen = function () {
       websocket.send(JSON.stringify({ event: registerEvent, uuid: uuid }));
@@ -266,5 +310,6 @@
     document.getElementById('copyDiagnostics').addEventListener('click', copyDiagnostics);
     document.getElementById('importSettings').addEventListener('change', importSettings);
     renderEndpointStatus();
+    applyVisibility();
   });
 }());
