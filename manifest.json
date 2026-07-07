@@ -5,7 +5,7 @@
   "Version": "0.2.1",
   "CodePath": "plugin.html",
   "Icon": "icons/plugin",
-  "Category": "Audio",
+  "Category": "Foobar2000-Control",
   "OS": [
     {
       "Platform": "windows",

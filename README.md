@@ -102,6 +102,18 @@ Create a release zip on Windows/PowerShell:
 npm run release:zip
 ```
 
+The release zip must include `component/foo_streamdock_control.dll`. If the DLL is not under `dist/` or `component/`, pass it explicitly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -ComponentDll C:\path\to\foo_streamdock_control.dll
+```
+
+To install both the Stream Dock plugin and the bundled foobar2000 component from an extracted release zip, run:
+
+```powershell
+.\scripts\install-local.ps1 -InstallComponent
+```
+
 ## foobar2000 Component
 
 The component source lives in `component/foo_streamdock_control/`.
@@ -128,8 +140,16 @@ Build steps:
    - `bcrypt.lib`
    - `crypt32.lib`
 5. Build a Release DLL named `foo_streamdock_control.dll`.
-6. Install the DLL into foobar2000's components folder through foobar2000 Preferences or by copying it to the user components directory.
+6. Install the DLL into foobar2000's components folder through foobar2000 Preferences or by copying it to the user components directory. Release zips can do this with `.\scripts\install-local.ps1 -InstallComponent`.
 7. Restart foobar2000 and confirm port `41920` is listening on localhost.
+
+This repository also includes a Visual Studio project and Windows-container build wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-foobar-component-in-windows-docker.ps1
+```
+
+The wrapper builds `Dockerfile.foobar2000-component.windows`, installs Visual Studio Build Tools, Node.js, and the foobar2000 SDK, then writes `dist\component\foo_streamdock_control.dll` and a release zip containing that DLL.
 
 ## Local Checks
 

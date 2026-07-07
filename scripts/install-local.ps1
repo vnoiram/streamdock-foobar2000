@@ -1,6 +1,8 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
   [string]$PluginRoot,
+  [string]$Foobar2000ComponentRoot,
+  [switch]$InstallComponent,
   [switch]$NoBuild,
   [switch]$DryRun
 )
@@ -93,6 +95,57 @@ function Resolve-PluginRoot {
   throw "Could not infer a Stream Dock plugin directory. Pass -PluginRoot explicitly."
 }
 
+function Resolve-Foobar2000ComponentRoot {
+  param([string]$Override)
+
+  if ($Override) {
+    return $Override
+  }
+
+  $candidates = @()
+  if ($env:APPDATA) {
+    $candidates += Join-Path $env:APPDATA "foobar2000\user-components"
+  }
+  if ($env:LOCALAPPDATA) {
+    $candidates += Join-Path $env:LOCALAPPDATA "foobar2000\user-components"
+  }
+
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path $candidate)) {
+      return $candidate
+    }
+  }
+
+  if ($candidates.Count -gt 0) {
+    return $candidates[0]
+  }
+
+  throw "Could not infer a foobar2000 user-components directory. Pass -Foobar2000ComponentRoot explicitly."
+}
+
+function Find-ComponentDll {
+  param([string]$PackageParent)
+
+  $roots = @(
+    (Join-Path $PackageParent "component"),
+    (Join-Path $PackageParent "foo_streamdock_control")
+  )
+
+  foreach ($root in $roots) {
+    if (-not (Test-Path $root)) {
+      continue
+    }
+
+    $dll = Get-ChildItem -Path $root -Recurse -File -Filter "foo_streamdock_control.dll" -ErrorAction SilentlyContinue |
+      Select-Object -First 1
+    if ($dll) {
+      return $dll.FullName
+    }
+  }
+
+  return $null
+}
+
 $RepoRoot = Resolve-RepoRoot
 $PackageDir = Find-PackagedPlugin $RepoRoot
 
@@ -115,16 +168,30 @@ if (-not $PackageDir) {
 
 $PluginName = Split-Path -Leaf $PackageDir
 $PackageParent = Split-Path -Parent $PackageDir
-$ExtraHelperDir = Join-Path $PackageParent "helper"
+$ComponentDll = Find-ComponentDll $PackageParent
 $InstallRoot = Resolve-PluginRoot $PluginRoot
 $Target = Join-Path $InstallRoot $PluginName
+$ComponentInstallRoot = $null
+$ComponentTarget = $null
+if ($InstallComponent -and $ComponentDll) {
+  $ComponentInstallRoot = Resolve-Foobar2000ComponentRoot $Foobar2000ComponentRoot
+  $ComponentTarget = Join-Path (Join-Path $ComponentInstallRoot "foo_streamdock_control") "foo_streamdock_control.dll"
+}
 
 if ($DryRun) {
   Write-Host "Dry run: would install '$PackageDir' to '$Target'."
-  if (Test-Path $ExtraHelperDir) {
-    Write-Host "Dry run: would copy '$ExtraHelperDir' to '$Target\helper'."
+  if ($InstallComponent -and $ComponentDll) {
+    Write-Host "Dry run: would copy '$ComponentDll' to '$ComponentTarget'."
+  } elseif ($ComponentDll -and -not $InstallComponent) {
+    Write-Host "Dry run: bundled component found at '$ComponentDll'; pass -InstallComponent to install it."
+  } elseif ($InstallComponent) {
+    Write-Host "Dry run: -InstallComponent was specified, but no bundled component DLL was found next to '$PackageDir'."
   }
   exit 0
+}
+
+if ($InstallComponent -and -not $ComponentDll) {
+  throw "-InstallComponent was specified, but foo_streamdock_control.dll was not found next to '$PackageDir'."
 }
 
 if ($PSCmdlet.ShouldProcess($InstallRoot, "Create Stream Dock plugin root")) {
@@ -136,8 +203,14 @@ if ((Test-Path $Target) -and $PSCmdlet.ShouldProcess($Target, "Remove existing p
 if ($PSCmdlet.ShouldProcess($Target, "Install plugin")) {
   Copy-Item -Recurse -Force $PackageDir $Target
 }
-if ((Test-Path $ExtraHelperDir) -and $PSCmdlet.ShouldProcess((Join-Path $Target "helper"), "Install bundled helper")) {
-  Copy-Item -Recurse -Force $ExtraHelperDir (Join-Path $Target "helper")
+if ($InstallComponent -and $ComponentDll -and $PSCmdlet.ShouldProcess($ComponentInstallRoot, "Create foobar2000 component root")) {
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ComponentTarget) | Out-Null
+}
+if ($InstallComponent -and $ComponentDll -and $PSCmdlet.ShouldProcess($ComponentTarget, "Install foobar2000 component")) {
+  Copy-Item -Force $ComponentDll $ComponentTarget
+}
+if ($ComponentDll -and -not $InstallComponent) {
+  Write-Host "Bundled component found at '$ComponentDll'. Pass -InstallComponent to install it."
 }
 
 Write-Host "Installed $PluginName to $Target"

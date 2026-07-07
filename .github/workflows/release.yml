@@ -48,6 +48,24 @@ jobs:
       - name: Check
         run: npm run check
 
+      - name: Install 7-Zip
+        shell: pwsh
+        run: choco install 7zip -y --no-progress
+
+      - name: Download foobar2000 SDK
+        shell: pwsh
+        run: |
+          $sdkArchive = Join-Path $env:RUNNER_TEMP "foobar2000-sdk.7z"
+          $sdkRoot = Join-Path $env:RUNNER_TEMP "foobar2000-sdk"
+          Invoke-WebRequest -Uri "https://www.foobar2000.org/downloads/SDK-2025-03-07.7z" -OutFile $sdkArchive
+          New-Item -ItemType Directory -Force -Path $sdkRoot | Out-Null
+          7z x $sdkArchive "-o$sdkRoot" -y
+          "FOOBAR2000_SDK_ROOT=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build foobar2000 component
+        shell: pwsh
+        run: .\scripts\build-component.ps1
+
       - name: Build release zip
         shell: pwsh
         run: npm run release:zip
@@ -58,6 +76,9 @@ jobs:
           $assets = Get-ChildItem "dist/release/*.zip"
           if ($assets.Count -ne 1) {
             throw "Expected exactly one release zip, found $($assets.Count)."
+          }
+          if (-not (Test-Path "dist/component/foo_streamdock_control.dll")) {
+            throw "Expected built foobar2000 component DLL under dist/component."
           }
           $assets | Format-Table Name, Length
 

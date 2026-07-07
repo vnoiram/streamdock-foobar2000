@@ -6,6 +6,13 @@
 #include <bcrypt.h>
 #include <wincrypt.h>
 
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+
 #include <atomic>
 #include <algorithm>
 #include <cctype>
@@ -33,6 +40,8 @@ namespace {
 
 constexpr unsigned short kPort = 41920;
 constexpr char kWebSocketGuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+static const GUID kMainMenuGroup = { 0x3ad8ab85, 0x3e39, 0x4e0c, { 0xa6, 0x2d, 0x5e, 0x70, 0x12, 0x81, 0xb0, 0xd7 } };
+static const GUID kMainMenuStatus = { 0xa5c65098, 0x21c8, 0x4c9d, { 0x81, 0x6c, 0x2b, 0xf8, 0x13, 0x5d, 0x0b, 0x96 } };
 
 std::string json_escape(const char* value) {
     std::string out;
@@ -277,23 +286,22 @@ std::string active_playlist_name() {
 }
 
 bool cycle_playback_order() {
-    static_api_ptr_t<playback_order_manager> order_manager;
-    const t_size count = playback_order::g_get_count();
+    static_api_ptr_t<playlist_manager> playlists;
+    const t_size count = playlists->playback_order_get_count();
     if (count == 0) return false;
-    t_size active = order_manager->get_active_order();
+    t_size active = playlists->playback_order_get_active();
     if (active == pfc_infinite || active >= count) active = 0;
-    order_manager->set_active_order((active + 1) % count);
+    playlists->playback_order_set_active((active + 1) % count);
     return true;
 }
 
 std::string current_playback_order_name() {
-    static_api_ptr_t<playback_order_manager> order_manager;
-    pfc::string8 name;
-    const t_size active = order_manager->get_active_order();
-    if (active != pfc_infinite && active < playback_order::g_get_count()) {
-        playback_order::g_get_name(active, name);
+    static_api_ptr_t<playlist_manager> playlists;
+    const t_size active = playlists->playback_order_get_active();
+    if (active != pfc_infinite && active < playlists->playback_order_get_count()) {
+        return playlists->playback_order_get_name(active);
     }
-    return name.c_str();
+    return {};
 }
 
 std::string directory_from_path(const std::string& path) {
@@ -371,10 +379,12 @@ std::string read_cover_data_url(const std::string& track_path) {
 class streamdock_server;
 streamdock_server* g_server = nullptr;
 void broadcast_current_state();
+void request_current_state_broadcast();
 std::mutex g_rating_mutex;
 std::map<std::string, int> g_runtime_ratings;
 std::mutex g_browser_mutex;
 t_size g_playlist_browser_index = 0;
+std::atomic<bool> g_state_callback_pending{ false };
 
 int rating_for_track(const std::string& track_path) {
     std::lock_guard<std::mutex> lock(g_rating_mutex);
@@ -598,10 +608,6 @@ public:
         g_server = nullptr;
     }
 
-    void broadcast_state() {
-        broadcast(make_state_json());
-    }
-
     void broadcast(const std::string& message) {
         std::lock_guard<std::mutex> lock(m_clients_mutex);
         for (auto it = m_clients.begin(); it != m_clients.end();) {
@@ -649,13 +655,13 @@ private:
             std::lock_guard<std::mutex> lock(m_clients_mutex);
             m_clients.push_back(client);
         }
-        send_text_frame(client, make_state_json());
+        request_current_state_broadcast();
 
         std::string text;
         while (m_running && read_text_frame(client, text)) {
             const std::string command = extract_command(text);
             if (command == "now_playing") {
-                send_text_frame(client, make_state_json());
+                request_current_state_broadcast();
             } else if (is_allowed_command(command)) {
                 const int amount = extract_amount(text);
                 const int seconds = extract_int_field(text, "seconds", 0);
@@ -723,15 +729,33 @@ private:
 
 streamdock_server g_streamdock_server;
 
+class state_callback : public main_thread_callback {
+public:
+    void callback_run() override {
+        g_state_callback_pending.store(false);
+        if (g_server) {
+            g_server->broadcast(make_state_json());
+        }
+    }
+};
+
 void broadcast_current_state() {
+    request_current_state_broadcast();
+}
+
+void request_current_state_broadcast() {
     if (g_server) {
-        g_server->broadcast_state();
+        if (!g_state_callback_pending.exchange(true)) {
+            static_api_ptr_t<main_thread_callback_manager> callbacks;
+            callbacks->add_callback(new service_impl_t<state_callback>());
+        }
     }
 }
 
 class streamdock_initquit : public initquit {
 public:
     void on_init() override {
+        console::print("Stream Dock Control loaded. Endpoint: ws://127.0.0.1:41920");
         g_streamdock_server.start();
     }
     void on_quit() override {
@@ -750,18 +774,59 @@ public:
     }
 
     void on_playback_starting(play_control::t_track_command, bool) override {}
-    void on_playback_new_track(metadb_handle_ptr) override { g_streamdock_server.broadcast_state(); }
-    void on_playback_stop(play_control::t_stop_reason) override { g_streamdock_server.broadcast_state(); }
+    void on_playback_new_track(metadb_handle_ptr) override { broadcast_current_state(); }
+    void on_playback_stop(play_control::t_stop_reason) override { broadcast_current_state(); }
     void on_playback_seek(double) override {}
-    void on_playback_pause(bool) override { g_streamdock_server.broadcast_state(); }
-    void on_playback_edited(metadb_handle_ptr) override { g_streamdock_server.broadcast_state(); }
+    void on_playback_pause(bool) override { broadcast_current_state(); }
+    void on_playback_edited(metadb_handle_ptr) override { broadcast_current_state(); }
     void on_playback_dynamic_info(const file_info&) override {}
-    void on_playback_dynamic_info_track(const file_info&) override { g_streamdock_server.broadcast_state(); }
-    void on_playback_time(double) override { g_streamdock_server.broadcast_state(); }
-    void on_volume_change(float) override { g_streamdock_server.broadcast_state(); }
+    void on_playback_dynamic_info_track(const file_info&) override { broadcast_current_state(); }
+    void on_playback_time(double) override { broadcast_current_state(); }
+    void on_volume_change(float) override { broadcast_current_state(); }
+};
+
+static mainmenu_group_popup_factory g_streamdock_mainmenu_group(
+    kMainMenuGroup,
+    mainmenu_groups::view,
+    mainmenu_commands::sort_priority_dontcare,
+    "Stream Dock Control");
+
+class streamdock_mainmenu_commands : public mainmenu_commands {
+public:
+    t_uint32 get_command_count() override {
+        return 1;
+    }
+
+    GUID get_command(t_uint32 index) override {
+        return index == 0 ? kMainMenuStatus : pfc::guid_null;
+    }
+
+    void get_name(t_uint32 index, pfc::string_base& out) override {
+        if (index == 0) out = "Status";
+    }
+
+    bool get_description(t_uint32 index, pfc::string_base& out) override {
+        if (index != 0) return false;
+        out = "Shows the Stream Dock Control component status.";
+        return true;
+    }
+
+    GUID get_parent() override {
+        return kMainMenuGroup;
+    }
+
+    void execute(t_uint32 index, service_ptr_t<service_base>) override {
+        if (index != 0) return;
+        MessageBoxA(
+            core_api::get_main_window(),
+            "Stream Dock Control is loaded.\nEndpoint: ws://127.0.0.1:41920",
+            "Stream Dock Control",
+            MB_OK | MB_ICONINFORMATION);
+    }
 };
 
 initquit_factory_t<streamdock_initquit> g_streamdock_initquit_factory;
 static play_callback_static_factory_t<streamdock_play_callback> g_streamdock_play_callback_factory;
+static mainmenu_commands_factory_t<streamdock_mainmenu_commands> g_streamdock_mainmenu_commands_factory;
 
 } // namespace
