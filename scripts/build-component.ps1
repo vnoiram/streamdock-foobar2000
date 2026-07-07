@@ -130,6 +130,18 @@ $SharedProject = Join-Path $ResolvedSdkRoot "foobar2000\shared\shared.vcxproj"
 if (Test-Path $SharedProject) {
   $content = Get-Content $SharedProject -Raw
   $updated = $content -replace '<ConfigurationType>DynamicLibrary</ConfigurationType>', '<ConfigurationType>StaticLibrary</ConfigurationType>'
+  $updated = [regex]::Replace(
+    $updated,
+    '<ClCompile Include="filedialogs_vista\.cpp"\s*/>',
+    '<ClCompile Include="filedialogs_vista.cpp"><ExcludedFromBuild>true</ExcludedFromBuild></ClCompile>')
+  $updated = [regex]::Replace(
+    $updated,
+    '<ClCompile Include="filedialogs_vista\.cpp">.*?</ClCompile>',
+    '<ClCompile Include="filedialogs_vista.cpp"><ExcludedFromBuild>true</ExcludedFromBuild></ClCompile>',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline)
+  if ($updated -eq $content) {
+    throw "Could not patch $SharedProject for static component linking."
+  }
   if ($updated -ne $content) {
     Set-Content -Path $SharedProject -Value $updated -NoNewline
   }

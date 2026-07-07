@@ -52,29 +52,6 @@ jobs:
         shell: pwsh
         run: choco install 7zip -y --no-progress
 
-      - name: Ensure Visual Studio ATL
-        shell: pwsh
-        run: |
-          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (-not (Test-Path $installer)) {
-            throw "vs_installer.exe was not found."
-          }
-          if (-not (Test-Path $vswhere)) {
-            throw "vswhere.exe was not found."
-          }
-          $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if (-not $installPath) {
-            throw "Visual Studio with VC tools was not found."
-          }
-          & $installer modify `
-            --installPath $installPath `
-            --quiet --norestart --nocache `
-            --add Microsoft.VisualStudio.Component.VC.ATL
-          if (($LASTEXITCODE -ne 0) -and ($LASTEXITCODE -ne 3010)) {
-            exit $LASTEXITCODE
-          }
-
       - name: Download foobar2000 SDK
         shell: pwsh
         run: |
