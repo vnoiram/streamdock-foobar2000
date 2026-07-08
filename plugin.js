@@ -78,7 +78,7 @@
       return diagnosticsTitle();
     }
     if (action === 'local.streamdock.foobar2000.playbackorder') {
-      return 'Order\n' + (lastState.playbackOrder || 'cycle');
+      return 'Order\n' + (lastState.playbackOrder || 'unknown');
     }
     if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
