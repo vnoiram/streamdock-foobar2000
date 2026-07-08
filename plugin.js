@@ -324,6 +324,21 @@
     return helperSend(Object.assign({ command: command }, extra || {}));
   }
 
+  function sendActionCommand(context, action, command, extra) {
+    if (sendCommand(command, extra)) {
+      return true;
+    }
+    logCommandFailure(context, action, command, 'component socket unavailable');
+    return false;
+  }
+
+  function logCommandFailure(context, action, command, reason) {
+    logMessage('command failed action=' + String(action || 'unknown') +
+      ' command=' + String(command || 'unknown') +
+      ' context=' + String(context || 'none') +
+      ' reason=' + String(reason || 'unknown'));
+  }
+
   function nowPlayingSummary() {
     return [
       lastState.playlist || 'Playlist',
@@ -356,11 +371,13 @@
       return;
     }
     clearTimeout(reconnectTimer);
+    logMessage('component connecting ' + (globalSettings.endpoint || DEFAULT_ENDPOINT));
     helperSocket = new WebSocket(globalSettings.endpoint || DEFAULT_ENDPOINT);
 
     helperSocket.onopen = function () {
       lastState.connected = true;
       reconnectDelay = 2000;
+      logMessage('component connected');
       refreshTitles();
       sendCommand('now_playing');
     };
@@ -413,22 +430,23 @@
     var action = message.action || (contexts[context] && contexts[context].action);
     var command = ACTION_COMMANDS[action];
     if (command) {
-      if (!sendCommand(command)) {
+      if (!sendActionCommand(context, action, command)) {
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.volume') {
-      if (!sendCommand('mute')) {
+      if (!sendActionCommand(context, action, 'mute')) {
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
-        if (!sendCommand(trackCommand(globalSettings.trackAction))) {
+        command = trackCommand(globalSettings.trackAction);
+        if (!sendActionCommand(context, action, command)) {
           showAlert(context);
         }
         return;
       }
       command = globalSettings.searchQuery ? 'playlist_search' : 'playlist_select';
-      if (!sendCommand(command, { name: globalSettings.playlistName, query: globalSettings.searchQuery })) {
+      if (!sendActionCommand(context, action, command, { name: globalSettings.playlistName, query: globalSettings.searchQuery })) {
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.rating') {
@@ -436,14 +454,14 @@
       var ratingVal = current >= 5 ? 1 : current + 1;
       pendingRating = ratingVal;
       globalSettings.rating = ratingVal;
-      if (!sendCommand('rating_set', { value: ratingVal })) {
+      if (!sendActionCommand(context, action, 'rating_set', { value: ratingVal })) {
         pendingRating = null;
         showAlert(context);
       } else {
         refreshTitles();
       }
     } else if (action === 'local.streamdock.foobar2000.diagnostics') {
-      if (!sendCommand('diagnostics')) {
+      if (!sendActionCommand(context, action, 'diagnostics')) {
         lastDiagnostics = { ok: false, error: 'component offline' };
         logMessage('diagnostics failed: component offline');
         setTitle(context, diagnosticsTitle());
@@ -456,13 +474,13 @@
     var context = message.context;
     var action = message.action || (contexts[context] && contexts[context].action);
     if (action === 'local.streamdock.foobar2000.volume') {
-      if (!sendCommand('mute')) {
+      if (!sendActionCommand(context, action, 'mute')) {
         showAlert(context);
       }
       return;
     }
     if (action === 'local.streamdock.foobar2000.trackknob') {
-      if (!sendCommand('play_pause')) {
+      if (!sendActionCommand(context, action, 'play_pause')) {
         showAlert(context);
       }
     }
@@ -486,19 +504,20 @@
     var action = message.action || (contexts[message.context] && contexts[message.context].action);
     if (action === 'local.streamdock.foobar2000.seek') {
       var seekStep = Number(globalSettings.seekStepSeconds) || 5;
-      if (!sendCommand('seek_delta', { seconds: ticks * seekStep })) {
+      if (!sendActionCommand(message.context, action, 'seek_delta', { seconds: ticks * seekStep })) {
         showAlert(message.context);
       }
       return;
     }
     if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
-        if (!sendCommand('playlist_browse_delta', { delta: ticks })) {
+        if (!sendActionCommand(message.context, action, 'playlist_browse_delta', { delta: ticks })) {
           showAlert(message.context);
         }
         return;
       }
-      if (!sendCommand(ticks > 0 ? 'playlist_next' : 'playlist_previous')) {
+      var playlistCommand = ticks > 0 ? 'playlist_next' : 'playlist_previous';
+      if (!sendActionCommand(message.context, action, playlistCommand)) {
         showAlert(message.context);
       }
       return;
@@ -508,7 +527,7 @@
       var nextRating = Math.max(1, Math.min(5, currentRating + ticks));
       pendingRating = nextRating;
       globalSettings.rating = nextRating;
-      if (!sendCommand('rating_set', { value: nextRating })) {
+      if (!sendActionCommand(message.context, action, 'rating_set', { value: nextRating })) {
         pendingRating = null;
         showAlert(message.context);
       } else {
@@ -523,12 +542,13 @@
     var step = Number(globalSettings.volumeStep) || 2;
     if (typeof lastState.volume === 'number') {
       var nextVolume = clampVolume(Number(lastState.volume) + (ticks > 0 ? 1 : -1) * Math.abs(ticks) * step);
-      if (!sendCommand('set_volume_percent', { value: Math.round(nextVolume) })) {
+      if (!sendActionCommand(message.context, action, 'set_volume_percent', { value: Math.round(nextVolume) })) {
         showAlert(message.context);
       }
       return;
     }
-    if (!sendCommand(ticks > 0 ? 'volume_up' : 'volume_down', { amount: Math.abs(ticks) * step })) {
+    var volumeCommand = ticks > 0 ? 'volume_up' : 'volume_down';
+    if (!sendActionCommand(message.context, action, volumeCommand, { amount: Math.abs(ticks) * step })) {
       showAlert(message.context);
     }
   }
@@ -537,14 +557,14 @@
     var threshold = Math.max(1, Math.round(Number(globalSettings.trackKnobTicks) || 8));
     var accumulated = (dialTickAccumulators[context] || 0) + ticks;
     while (accumulated >= threshold) {
-      if (!sendCommand('next')) {
+      if (!sendActionCommand(context, 'local.streamdock.foobar2000.trackknob', 'next')) {
         showAlert(context);
         break;
       }
       accumulated -= threshold;
     }
     while (accumulated <= -threshold) {
-      if (!sendCommand('previous')) {
+      if (!sendActionCommand(context, 'local.streamdock.foobar2000.trackknob', 'previous')) {
         showAlert(context);
         break;
       }
