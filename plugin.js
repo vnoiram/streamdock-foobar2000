@@ -102,7 +102,7 @@
       return 'Track';
     }
     if (action === 'local.streamdock.foobar2000.mute') {
-      return lastState.muted ? 'Muted' : 'Mute';
+      return lastState.muted ? 'Unmute' : 'Mute';
     }
     if (action === 'local.streamdock.foobar2000.playpause') {
       return lastState.playing ? 'Pause' : 'Play';
