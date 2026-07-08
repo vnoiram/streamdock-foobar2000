@@ -451,7 +451,8 @@
       }
     } else if (action === 'local.streamdock.foobar2000.rating') {
       var current = Math.max(0, Math.min(5, Number(pendingRating !== null ? pendingRating : (lastState.rating || 0))));
-      var ratingVal = current >= 5 ? 1 : current + 1;
+      var inverted = globalSettings.invertKnob === true || globalSettings.invertKnob === 'true';
+      var ratingVal = inverted ? (current <= 1 ? 5 : current - 1) : (current >= 5 ? 1 : current + 1);
       pendingRating = ratingVal;
       globalSettings.rating = ratingVal;
       if (!sendActionCommand(context, action, 'rating_set', { value: ratingVal })) {
