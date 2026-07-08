@@ -70,6 +70,7 @@
   function titleForContext(context) {
     var action = contexts[context] && contexts[context].action;
     if (!lastState.connected) {
+      if (action === 'local.streamdock.foobar2000.nowplaying') return 'Now\noffline';
       return action === 'local.streamdock.foobar2000.diagnostics' ? 'Diag\noffline' : '';
     }
     if (action === 'local.streamdock.foobar2000.diagnostics') {
@@ -109,6 +110,12 @@
   }
 
   function formatNowPlaying() {
+    if (!lastState.connected) {
+      return 'Now\noffline';
+    }
+    if (!lastState.hasState) {
+      return 'Now\nwaiting';
+    }
     var artist = lastState.artist || '';
     var title = lastState.title || fileNameFromPath(lastState.track || '');
     var playlist = lastState.playlist || 'Playlist';
@@ -344,7 +351,7 @@
     helperSocket.onmessage = function (event) {
       var message = parseJson(event.data, {});
       if (message.event === 'state' || message.type === 'state') {
-        lastState = Object.assign({}, lastState, message.payload || message.state || {}, { connected: true });
+        lastState = Object.assign({}, lastState, message.payload || message.state || {}, { connected: true, hasState: true });
         if (lastState.rating !== undefined) {
           pendingRating = null;
         }
