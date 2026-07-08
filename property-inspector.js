@@ -18,7 +18,7 @@
     'local.streamdock.foobar2000.volume': ['volumeStep', 'minVolume', 'maxVolume', 'invertKnob'],
     'local.streamdock.foobar2000.trackknob': ['trackKnobTicks', 'invertKnob'],
     'local.streamdock.foobar2000.seek': ['seekStepSeconds', 'invertKnob'],
-    'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery'],
+    'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery', 'invertKnob'],
     'local.streamdock.foobar2000.rating': ['invertKnob'],
     'local.streamdock.foobar2000.nowplaying': ['showProgress', 'nowPlayingTemplate', 'albumArtUrlTemplate'],
     'local.streamdock.foobar2000.diagnostics': DIAGNOSTIC_FIELDS

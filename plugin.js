@@ -445,6 +445,13 @@
         }
         return;
       }
+      if (!globalSettings.searchQuery && !globalSettings.playlistName) {
+        command = (globalSettings.invertKnob === true || globalSettings.invertKnob === 'true') ? 'playlist_previous' : 'playlist_next';
+        if (!sendActionCommand(context, action, command)) {
+          showAlert(context);
+        }
+        return;
+      }
       command = globalSettings.searchQuery ? 'playlist_search' : 'playlist_select';
       if (!sendActionCommand(context, action, command, { name: globalSettings.playlistName, query: globalSettings.searchQuery })) {
         showAlert(context);
