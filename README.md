@@ -25,7 +25,7 @@ Initial actions:
 - Now playing display
 - Now playing position/length display when the component reports timing
 - Seek by knob
-- Track next/previous by knob with configurable tick threshold
+- Track next/previous by knob with configurable tick threshold and press-to-play/pause
 - Playback order command
 - Playlist command
 - Playlist selection, playlist next/previous, and playlist-name search

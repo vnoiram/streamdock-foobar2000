@@ -323,6 +323,12 @@
       if (!sendCommand('mute')) {
         showAlert(context);
       }
+      return;
+    }
+    if (action === 'local.streamdock.foobar2000.trackknob') {
+      if (!sendCommand('play_pause')) {
+        showAlert(context);
+      }
     }
   }
 

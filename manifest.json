@@ -2,7 +2,7 @@
   "Name": "Stream Dock foobar2000",
   "Description": "Control foobar2000 through a local foo_streamdock_control component.",
   "Author": "local",
-  "Version": "0.2.6",
+  "Version": "0.2.7",
   "CodePath": "plugin.html",
   "Icon": "icons/plugin",
   "Category": "Foobar2000-Control",
@@ -61,7 +61,7 @@
     {
       "UUID": "local.streamdock.foobar2000.trackknob",
       "Name": "Track Knob",
-      "Tooltip": "Go to the next or previous foobar2000 track with a knob.",
+      "Tooltip": "Go to the next or previous foobar2000 track with a knob and press to play/pause.",
       "Controllers": ["Knob"],
       "Icon": "icons/plugin",
       "States": [{ "Title": "Track", "Image": "icons/plugin" }],
