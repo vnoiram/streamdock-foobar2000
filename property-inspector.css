@@ -33,6 +33,7 @@ body {
   color: #fff;
   cursor: pointer;
   padding: 5px 10px;
+  text-align: center;
 }
 
 .sdpi-checkbox {
@@ -43,6 +44,21 @@ body {
 .sdpi-status {
   color: #c9c9c9;
   flex: 1;
+}
+
+.plugin-settings {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.plugin-settings .sdpi-button {
+  flex: 0 0 calc(25% - 8px);
+  min-width: 56px;
+}
+
+.plugin-settings .sdpi-status {
+  flex: 1 0 100%;
+  margin-left: 104px;
 }
 
 .is-hidden {

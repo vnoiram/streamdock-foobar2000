@@ -30,5 +30,17 @@ Accepted commands are allowlisted:
 - `volume_down`
 - `mute`
 - `now_playing`
+- `diagnostics`
+- `set_volume_percent`
+- `seek_delta`
+- `cycle_playback_order`
+- `playlist_select`
+- `playlist_next`
+- `playlist_previous`
+- `playlist_search`
+- `library_search`
+- `playlist_browse_delta`
+- `playlist_play_selected`
+- `rating_set`
 
 Unknown commands receive an `error` message and are not dispatched to foobar2000.

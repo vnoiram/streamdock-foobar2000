@@ -380,6 +380,7 @@ class streamdock_server;
 streamdock_server* g_server = nullptr;
 void broadcast_current_state();
 void request_current_state_broadcast();
+void request_diagnostics_broadcast();
 std::mutex g_rating_mutex;
 std::map<std::string, int> g_runtime_ratings;
 std::mutex g_browser_mutex;
@@ -530,6 +531,49 @@ std::string make_state_json() {
     return json;
 }
 
+std::string make_diagnostics_json(size_t client_count) {
+    static_api_ptr_t<playback_control> playback;
+    const bool playing = playback->is_playing();
+    const bool paused = playback->is_paused();
+    pfc::string8 artist;
+    pfc::string8 title;
+    pfc::string8 track;
+    metadb_handle_ptr handle;
+    if (playback->get_now_playing(handle) && handle.is_valid()) {
+        file_info_impl info;
+        if (handle->get_info(info)) {
+            const char* artist_value = info.meta_get("artist", 0);
+            const char* title_value = info.meta_get("title", 0);
+            if (artist_value) artist = artist_value;
+            if (title_value) title = title_value;
+        }
+        track = handle->get_path();
+    }
+
+    std::string json = "{\"event\":\"diagnostics\",\"payload\":{";
+    json += "\"ok\":true";
+    json += ",\"component\":\"foo_streamdock_control\"";
+    json += ",\"endpoint\":\"ws://127.0.0.1:41920\"";
+    json += ",\"clientCount\":";
+    json += std::to_string(static_cast<unsigned long long>(client_count));
+    json += ",\"playing\":";
+    json += playing && !paused ? "true" : "false";
+    json += ",\"paused\":";
+    json += paused ? "true" : "false";
+    json += ",\"playbackOrder\":\"";
+    json += json_escape(current_playback_order_name().c_str());
+    json += "\",\"playlist\":\"";
+    json += json_escape(active_playlist_name().c_str());
+    json += "\",\"artist\":\"";
+    json += json_escape(artist.c_str());
+    json += "\",\"title\":\"";
+    json += json_escape(title.c_str());
+    json += "\",\"track\":\"";
+    json += json_escape(track.c_str());
+    json += "\"}}";
+    return json;
+}
+
 class command_callback : public main_thread_callback {
 public:
     explicit command_callback(std::string command, int amount, int seconds, int value, int delta, std::string name, std::string query)
@@ -573,6 +617,9 @@ public:
             play_selected_playlist_item();
         } else if (m_command == "rating_set") {
             set_rating_for_now_playing(m_value);
+        } else if (m_command == "diagnostics") {
+            request_diagnostics_broadcast();
+            return;
         }
         broadcast_current_state();
     }
@@ -620,6 +667,11 @@ public:
         }
     }
 
+    size_t client_count() {
+        std::lock_guard<std::mutex> lock(m_clients_mutex);
+        return m_clients.size();
+    }
+
 private:
     void run() {
         WSADATA wsa = {};
@@ -662,6 +714,9 @@ private:
             const std::string command = extract_command(text);
             if (command == "now_playing") {
                 request_current_state_broadcast();
+            } else if (command == "diagnostics") {
+                static_api_ptr_t<main_thread_callback_manager> callbacks;
+                callbacks->add_callback(new service_impl_t<command_callback>(command, 1, 0, 0, 0, "", ""));
             } else if (is_allowed_command(command)) {
                 const int amount = extract_amount(text);
                 const int seconds = extract_int_field(text, "seconds", 0);
@@ -717,6 +772,7 @@ private:
             command == "playlist_search" ||
             command == "playlist_browse_delta" ||
             command == "playlist_play_selected" ||
+            command == "diagnostics" ||
             command == "library_search";
     }
 
@@ -739,6 +795,15 @@ public:
     }
 };
 
+class diagnostics_callback : public main_thread_callback {
+public:
+    void callback_run() override {
+        if (g_server) {
+            g_server->broadcast(make_diagnostics_json(g_server->client_count()));
+        }
+    }
+};
+
 void broadcast_current_state() {
     request_current_state_broadcast();
 }
@@ -749,6 +814,13 @@ void request_current_state_broadcast() {
             static_api_ptr_t<main_thread_callback_manager> callbacks;
             callbacks->add_callback(new service_impl_t<state_callback>());
         }
+    }
+}
+
+void request_diagnostics_broadcast() {
+    if (g_server) {
+        static_api_ptr_t<main_thread_callback_manager> callbacks;
+        callbacks->add_callback(new service_impl_t<diagnostics_callback>());
     }
 }
 

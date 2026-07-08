@@ -22,6 +22,8 @@
   var contexts = {};
   var dialTickAccumulators = {};
   var lastState = { connected: false };
+  var lastDiagnostics = null;
+  var lastStateSummary = '';
 
   function parseJson(value, fallback) {
     if (!value) {
@@ -68,10 +70,10 @@
   function titleForContext(context) {
     var action = contexts[context] && contexts[context].action;
     if (!lastState.connected) {
-      return 'fb2k\noffline';
+      return action === 'local.streamdock.foobar2000.diagnostics' ? 'Diag\noffline' : '';
     }
     if (action === 'local.streamdock.foobar2000.diagnostics') {
-      return 'fb2k\nok';
+      return diagnosticsTitle();
     }
     if (action === 'local.streamdock.foobar2000.playbackorder') {
       return 'Order\n' + (lastState.playbackOrder || 'cycle');
@@ -95,7 +97,7 @@
       return formatVolume();
     }
     if (action === 'local.streamdock.foobar2000.trackknob') {
-      return 'Track\nnext/prev';
+      return '';
     }
     if (action === 'local.streamdock.foobar2000.mute') {
       return lastState.muted ? 'Muted' : 'Mute';
@@ -103,12 +105,13 @@
     if (action === 'local.streamdock.foobar2000.playpause') {
       return lastState.playing ? 'Pause' : 'Play';
     }
-    return contexts[context].title || '';
+    return '';
   }
 
   function formatNowPlaying() {
     var artist = lastState.artist || '';
-    var title = lastState.title || lastState.track || '';
+    var title = lastState.title || fileNameFromPath(lastState.track || '');
+    var playlist = lastState.playlist || 'Playlist';
     if (globalSettings.nowPlayingTemplate) {
       return truncateTitle(String(globalSettings.nowPlayingTemplate).replace(/\{(artist|title|track|position|length|volume|playlist)\}/g, function (_, key) {
         return {
@@ -118,18 +121,30 @@
           position: formatTime(lastState.positionSeconds),
           length: formatTime(lastState.lengthSeconds),
           volume: Math.round(Number(lastState.volume) || 0) + '%',
-          playlist: lastState.playlist || ''
+          playlist: playlist
         }[key] || '';
       }));
     }
     if (!artist && !title) {
       return lastState.playing ? 'Playing' : 'Stopped';
     }
-    var line = artist ? artist + '\n' + title : title;
+    var line = truncateLine(playlist) + '\n' + truncateLine(artist || 'Unknown artist') + '\n' + truncateLine(title || 'Unknown track');
     if (globalSettings.showProgress && typeof lastState.positionSeconds === 'number' && typeof lastState.lengthSeconds === 'number' && lastState.lengthSeconds > 0) {
       line += '\n' + formatTime(lastState.positionSeconds) + '/' + formatTime(lastState.lengthSeconds);
     }
     return line;
+  }
+
+  function fileNameFromPath(value) {
+    value = String(value || '');
+    if (!value) return '';
+    try {
+      value = decodeURIComponent(value.replace(/^file:\/\//i, ''));
+    } catch (error) {
+      value = value.replace(/^file:\/\//i, '');
+    }
+    var parts = value.split(/[\\/]/);
+    return parts[parts.length - 1] || value;
   }
 
   function formatTime(seconds) {
@@ -156,6 +171,11 @@
     return value.length > 36 ? value.slice(0, 35) + '…' : value;
   }
 
+  function truncateLine(value) {
+    value = String(value || '');
+    return value.length > 22 ? value.slice(0, 21) + '…' : value;
+  }
+
   function refreshTitles() {
     Object.keys(contexts).forEach(function (context) {
       setTitle(context, titleForContext(context));
@@ -177,24 +197,39 @@
         .replace(/\{title\}/g, encodeURIComponent(lastState.title || lastState.track || ''));
     }
     var fill = Number(lastState.lengthSeconds) > 0 ? Number(lastState.positionSeconds) / Number(lastState.lengthSeconds) * 100 : 0;
-    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'STOP', lastState.artist || 'fb2k', fill);
+    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'STOP', lastState.artist || 'NOW', fill);
   }
 
   function actionImage(context) {
     var action = contexts[context] && contexts[context].action;
     if (!lastState.connected) {
-      return svgImage('#363b44', '#aeb7c2', 'fb2k', 'OFF');
+      return svgIconImage('#363b44', '#aeb7c2', iconForAction(action || ''), 0);
     }
     if (action === 'local.streamdock.foobar2000.mute') {
-      return svgImage(lastState.muted ? '#742a2a' : '#2d3748', '#ffffff', lastState.muted ? 'MUTE' : 'AUD', '');
+      return svgIconImage(lastState.muted ? '#742a2a' : '#2d3748', '#ffffff', 'mute', 0);
     }
     if (action === 'local.streamdock.foobar2000.volume') {
-      return svgImage('#234e52', '#ffffff', String(Math.round(lastState.volume || 0)), 'VOL');
+      return svgIconImage('#234e52', '#ffffff', 'volume', Number(lastState.volume) || 0);
     }
     if (action === 'local.streamdock.foobar2000.trackknob') {
-      return svgImage('#2d3748', '#ffffff', 'TRK', 'NEXT');
+      return svgIconImage('#2d3748', '#ffffff', 'trackknob', 0);
     }
-    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'fb2k', '');
+    return svgIconImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', iconForAction(action || ''), 0);
+  }
+
+  function iconForAction(action) {
+    return {
+      'local.streamdock.foobar2000.playpause': 'playpause',
+      'local.streamdock.foobar2000.stop': 'stop',
+      'local.streamdock.foobar2000.previous': 'previous',
+      'local.streamdock.foobar2000.next': 'next',
+      'local.streamdock.foobar2000.mute': 'mute',
+      'local.streamdock.foobar2000.seek': 'seek',
+      'local.streamdock.foobar2000.playbackorder': 'playbackorder',
+      'local.streamdock.foobar2000.playlist': 'playlist',
+      'local.streamdock.foobar2000.rating': 'rating',
+      'local.streamdock.foobar2000.diagnostics': 'diagnostics'
+    }[action] || 'plugin';
   }
 
   function svgImage(background, foreground, main, sub, fillPercent) {
@@ -208,6 +243,37 @@
       '<text x="72" y="101" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="' + foreground + '">' + escapeSvg(truncateImageText(sub)) + '</text>' +
       '</svg>';
     return 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
+  }
+
+  function svgIconImage(background, foreground, icon, fillPercent) {
+    var fill = Math.max(0, Math.min(100, Number(fillPercent) || 0));
+    var barWidth = Math.round(116 * fill / 100);
+    var shape = iconShape(icon, foreground);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">' +
+      '<rect width="144" height="144" rx="20" fill="' + background + '"/>' +
+      '<rect x="14" y="124" width="' + barWidth + '" height="8" rx="4" fill="' + foreground + '" opacity="0.32"/>' +
+      '<circle cx="72" cy="72" r="47" fill="' + foreground + '" opacity="0.12"/>' +
+      shape +
+      '</svg>';
+    return 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
+  }
+
+  function iconShape(icon, color) {
+    var stroke = ' stroke="' + color + '" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+    var fill = ' fill="' + color + '"';
+    if (icon === 'playpause') return '<path d="M49 42v60l42-30z"' + fill + '/><path d="M96 45v54M114 45v54"' + stroke + '/>';
+    if (icon === 'stop') return '<rect x="45" y="45" width="54" height="54" rx="7"' + fill + '/>';
+    if (icon === 'previous') return '<path d="M42 43v58M101 43 58 72l43 29z"' + fill + '/>';
+    if (icon === 'next') return '<path d="M102 43v58M43 43l43 29-43 29z"' + fill + '/>';
+    if (icon === 'volume') return '<path d="M36 62h22l26-22v64L58 82H36z"' + fill + '/><path d="M94 54c10 10 10 26 0 36"' + stroke + '/>';
+    if (icon === 'mute') return '<path d="M36 62h22l26-22v64L58 82H36z"' + fill + '/><path d="M96 58l24 28M120 58 96 86"' + stroke + '/>';
+    if (icon === 'trackknob') return '<circle cx="72" cy="72" r="32"' + stroke + '/><path d="M72 40v18M96 72h18M85 61l26-18M59 61 33 43"' + stroke + '/>';
+    if (icon === 'seek') return '<path d="M42 72h60M58 52 38 72l20 20M86 52l20 20-20 20"' + stroke + '/>';
+    if (icon === 'playbackorder') return '<path d="M46 55h45l-12-12M98 89H53l12 12"' + stroke + '/>';
+    if (icon === 'playlist') return '<path d="M43 50h58M43 72h58M43 94h38"' + stroke + '/>';
+    if (icon === 'rating') return '<path d="M72 35l11 24 26 3-19 18 5 26-23-13-23 13 5-26-19-18 26-3z"' + fill + '/>';
+    if (icon === 'diagnostics') return '<path d="M42 76l16 16 42-44M40 112h64"' + stroke + '/>';
+    return '<circle cx="72" cy="64" r="28"' + stroke + '/><path d="M45 43l-10-16M99 43l10-16M52 77h40M58 59h.1M86 59h.1"' + stroke + '/>';
   }
 
   function truncateImageText(value) {
@@ -234,6 +300,33 @@
     return helperSend(Object.assign({ command: command }, extra || {}));
   }
 
+  function nowPlayingSummary() {
+    return [
+      lastState.playlist || 'Playlist',
+      lastState.artist || 'Unknown artist',
+      lastState.title || fileNameFromPath(lastState.track || '') || 'Unknown track'
+    ].join(' / ');
+  }
+
+  function diagnosticsTitle() {
+    if (lastDiagnostics && lastDiagnostics.ok === false) {
+      return 'Diag\nerror';
+    }
+    if (lastDiagnostics && lastDiagnostics.ok) {
+      return 'Diag\nok\n' + truncateLine(lastDiagnostics.playbackOrder || lastDiagnostics.playlist || 'ready');
+    }
+    return lastState.connected ? 'Diag\nready' : 'Diag\noffline';
+  }
+
+  function diagnosticsSummary(payload) {
+    if (!payload) return 'diagnostics unavailable';
+    return 'diagnostics ok=' + String(payload.ok) +
+      ' clients=' + String(payload.clientCount) +
+      ' order=' + String(payload.playbackOrder || '') +
+      ' playlist=' + String(payload.playlist || '') +
+      ' track=' + String(payload.title || fileNameFromPath(payload.track || '') || '');
+  }
+
   function connectHelper() {
     if (helperSocket && (helperSocket.readyState === WebSocket.OPEN || helperSocket.readyState === WebSocket.CONNECTING)) {
       return;
@@ -255,6 +348,16 @@
         if (lastState.rating !== undefined) {
           pendingRating = null;
         }
+        var summary = nowPlayingSummary();
+        if (summary !== lastStateSummary) {
+          lastStateSummary = summary;
+          logMessage('state: ' + summary);
+        }
+        refreshTitles();
+      }
+      if (message.event === 'diagnostics' || message.type === 'diagnostics') {
+        lastDiagnostics = Object.assign({}, message.payload || {}, { receivedAt: new Date().toISOString() });
+        logMessage(diagnosticsSummary(lastDiagnostics));
         refreshTitles();
       }
       if (message.event === 'error' || message.type === 'error') {
@@ -305,14 +408,23 @@
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.rating') {
-      var ratingVal = Math.max(1, Math.min(5, Number(pendingRating !== null ? pendingRating : (globalSettings.rating || 5))));
+      var current = Math.max(0, Math.min(5, Number(pendingRating !== null ? pendingRating : (lastState.rating || 0))));
+      var ratingVal = current >= 5 ? 1 : current + 1;
       pendingRating = ratingVal;
+      globalSettings.rating = ratingVal;
       if (!sendCommand('rating_set', { value: ratingVal })) {
         pendingRating = null;
         showAlert(context);
+      } else {
+        refreshTitles();
       }
     } else if (action === 'local.streamdock.foobar2000.diagnostics') {
-      setTitle(context, lastState.connected ? 'fb2k\nconnected' : 'fb2k\noffline');
+      if (!sendCommand('diagnostics')) {
+        lastDiagnostics = { ok: false, error: 'component offline' };
+        logMessage('diagnostics failed: component offline');
+        setTitle(context, diagnosticsTitle());
+        showAlert(context);
+      }
     }
   }
 

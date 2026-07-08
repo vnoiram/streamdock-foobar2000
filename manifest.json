@@ -2,7 +2,7 @@
   "Name": "Stream Dock foobar2000",
   "Description": "Control foobar2000 through a local foo_streamdock_control component.",
   "Author": "local",
-  "Version": "0.2.7",
+  "Version": "0.3.0",
   "CodePath": "plugin.html",
   "Icon": "icons/plugin",
   "Category": "Foobar2000-Control",
@@ -18,8 +18,8 @@
       "Name": "Play/Pause",
       "Tooltip": "Toggle foobar2000 playback.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Play", "Image": "icons/plugin" }],
+      "Icon": "icons/playpause",
+      "States": [{ "Title": "", "Image": "icons/playpause" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -27,8 +27,8 @@
       "Name": "Stop",
       "Tooltip": "Stop foobar2000 playback.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Stop", "Image": "icons/plugin" }],
+      "Icon": "icons/stop",
+      "States": [{ "Title": "", "Image": "icons/stop" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -36,8 +36,8 @@
       "Name": "Previous",
       "Tooltip": "Go to the previous foobar2000 track.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Prev", "Image": "icons/plugin" }],
+      "Icon": "icons/previous",
+      "States": [{ "Title": "", "Image": "icons/previous" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -45,8 +45,8 @@
       "Name": "Next",
       "Tooltip": "Go to the next foobar2000 track.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Next", "Image": "icons/plugin" }],
+      "Icon": "icons/next",
+      "States": [{ "Title": "", "Image": "icons/next" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -54,8 +54,8 @@
       "Name": "Volume",
       "Tooltip": "Adjust foobar2000 volume with a knob and press to mute/unmute.",
       "Controllers": ["Knob"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Vol", "Image": "icons/plugin" }],
+      "Icon": "icons/volume",
+      "States": [{ "Title": "", "Image": "icons/volume" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -63,8 +63,8 @@
       "Name": "Track Knob",
       "Tooltip": "Go to the next or previous foobar2000 track with a knob and press to play/pause.",
       "Controllers": ["Knob"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Track", "Image": "icons/plugin" }],
+      "Icon": "icons/trackknob",
+      "States": [{ "Title": "", "Image": "icons/trackknob" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -72,8 +72,8 @@
       "Name": "Mute",
       "Tooltip": "Toggle foobar2000 mute.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Mute", "Image": "icons/plugin" }],
+      "Icon": "icons/mute",
+      "States": [{ "Title": "", "Image": "icons/mute" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -81,8 +81,8 @@
       "Name": "Now Playing",
       "Tooltip": "Show current foobar2000 track.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Now", "Image": "icons/plugin" }],
+      "Icon": "icons/nowplaying",
+      "States": [{ "Title": "Now", "Image": "icons/nowplaying" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -90,8 +90,8 @@
       "Name": "Seek",
       "Tooltip": "Seek foobar2000 playback with a knob.",
       "Controllers": ["Knob"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Seek", "Image": "icons/plugin" }],
+      "Icon": "icons/seek",
+      "States": [{ "Title": "", "Image": "icons/seek" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -99,8 +99,8 @@
       "Name": "Playback Order",
       "Tooltip": "Cycle foobar2000 playback order.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Order", "Image": "icons/plugin" }],
+      "Icon": "icons/playbackorder",
+      "States": [{ "Title": "Order", "Image": "icons/playbackorder" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -108,8 +108,8 @@
       "Name": "Playlist",
       "Tooltip": "Switch foobar2000 playlist.",
       "Controllers": ["Keypad", "Knob"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "List", "Image": "icons/plugin" }],
+      "Icon": "icons/playlist",
+      "States": [{ "Title": "", "Image": "icons/playlist" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -117,8 +117,8 @@
       "Name": "Rating",
       "Tooltip": "Set rating for the current foobar2000 track.",
       "Controllers": ["Keypad", "Knob"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Rate", "Image": "icons/plugin" }],
+      "Icon": "icons/rating",
+      "States": [{ "Title": "Rate", "Image": "icons/rating" }],
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
@@ -126,8 +126,8 @@
       "Name": "Diagnostics",
       "Tooltip": "Show foobar2000 Stream Dock connection diagnostics.",
       "Controllers": ["Keypad"],
-      "Icon": "icons/plugin",
-      "States": [{ "Title": "Diag", "Image": "icons/plugin" }],
+      "Icon": "icons/diagnostics",
+      "States": [{ "Title": "Diag", "Image": "icons/diagnostics" }],
       "PropertyInspectorPath": "property-inspector.html"
     }
   ]

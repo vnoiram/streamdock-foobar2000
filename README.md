@@ -6,13 +6,14 @@ Primary control must go through a custom foobar2000 component, tentatively `foo_
 
 ## Version
 
-Current version: `0.2.0`.
+Current version: `0.3.0`.
 
-Notable `0.2.0` updates:
+Notable `0.3.0` updates:
 
-- Added `npm run clean` for removing generated `dist/` output.
-- Added `npm run release:zip` as the standard release entry point.
-- Release zips now include the manifest version in the filename.
+- Added feature-specific action icons and refreshed the plugin icon.
+- Now Playing defaults to `playlist`, `artist`, and `title`, falling back to the playing file name when tags are empty.
+- Added a component-side `diagnostics` command for the Diagnostics action and Property Inspector check.
+- Simplified Property Inspector settings management to plugin settings import/export.
 
 Initial actions:
 
@@ -41,8 +42,7 @@ Initial actions:
 - Runtime per-track rating command for Stream Dock display
 - Diagnostics action
 - Plugin-side `logMessage` diagnostics
-- Property Inspector `Copy` / `Paste` for quickly duplicating global foobar2000 settings between keys
-- Property Inspector component `Diagnose`, search/playlist `Preview`, endpoint warning, and `Reset` for safe defaults
+- Property Inspector component `Diagnose`, endpoint warning, diagnostics log copy, and plugin settings import/export
 - Track press modes for play, queue, play-next, or append, plus common backup export format and Property Inspector diagnostic log copy
 
 Default component endpoint:
@@ -53,8 +53,9 @@ ws://127.0.0.1:41920
 
 Expected component messages:
 
-- Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `volume_up`, `volume_down`, `mute`, `now_playing`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `playlist_search`, `library_search`, `playlist_browse_delta`, `playlist_play_selected`, `rating_set`.
+- Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `volume_up`, `volume_down`, `mute`, `now_playing`, `diagnostics`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `playlist_search`, `library_search`, `playlist_browse_delta`, `playlist_play_selected`, `rating_set`.
 - Component to Dock: `{ "event": "state", "payload": { "playing": true, "artist": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "playlist": "Default", "browseTrack": "...", "browseIndex": 0, "browseCount": 20, "playbackOrder": "Default", "rating": 5, "muted": false } }`.
+- Diagnostics response: `{ "event": "diagnostics", "payload": { "ok": true, "component": "foo_streamdock_control", "endpoint": "ws://127.0.0.1:41920", "clientCount": 1, "playing": true, "paused": false, "playbackOrder": "Default", "playlist": "Default", "artist": "...", "title": "...", "track": "..." } }`.
 
 ## Repository Layout
 
@@ -81,7 +82,7 @@ The plugin defaults to `ws://127.0.0.1:41920`. Change the endpoint in the Proper
 
 The Property Inspector warns when the component endpoint is not localhost because playback commands and now-playing data will be sent to that endpoint. The bundled component is designed to listen only on `127.0.0.1`.
 
-For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for the older playlist-switching behavior. `Now template` overrides the Now Playing title text; leave it blank for the built-in display.
+For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for the older playlist-switching behavior. `Now template` overrides the Now Playing title text; leave it blank for the built-in `playlist\nartist\ntitle` display.
 
 Build a distributable plugin folder:
 

@@ -6,15 +6,22 @@
   var currentAction = '';
   var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'trackKnobTicks', 'playlistName', 'playlistDialMode', 'trackAction', 'rating', 'showProgress', 'nowPlayingTemplate', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
-  var COMMON_FIELDS = ['endpoint', 'generatedImages', 'copySettings', 'diagnoseSettings', 'resetSettings', 'pasteSettings', 'exportSettings', 'copyDiagnostics', 'importSettings'];
+  var PLUGIN_SETTING_FIELDS = ['exportSettings', 'importSettingsButton'];
+  var DIAGNOSTIC_FIELDS = ['endpoint', 'diagnoseSettings', 'copyDiagnostics'];
   var ACTION_FIELDS = {
+    'local.streamdock.foobar2000.playpause': [],
+    'local.streamdock.foobar2000.stop': [],
+    'local.streamdock.foobar2000.previous': [],
+    'local.streamdock.foobar2000.next': [],
+    'local.streamdock.foobar2000.mute': [],
+    'local.streamdock.foobar2000.playbackorder': [],
     'local.streamdock.foobar2000.volume': ['volumeStep', 'minVolume', 'maxVolume', 'invertKnob'],
     'local.streamdock.foobar2000.trackknob': ['trackKnobTicks', 'invertKnob'],
     'local.streamdock.foobar2000.seek': ['seekStepSeconds', 'invertKnob'],
-    'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery', 'previewSearch'],
-    'local.streamdock.foobar2000.rating': ['rating', 'invertKnob'],
+    'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery'],
+    'local.streamdock.foobar2000.rating': ['invertKnob'],
     'local.streamdock.foobar2000.nowplaying': ['showProgress', 'nowPlayingTemplate', 'albumArtUrlTemplate'],
-    'local.streamdock.foobar2000.diagnostics': ['diagnoseSettings', 'copyDiagnostics']
+    'local.streamdock.foobar2000.diagnostics': DIAGNOSTIC_FIELDS
   };
 
   function setStatus(text) {
@@ -93,32 +100,6 @@
     });
   }
 
-  function copySettings() {
-    sendSettings();
-    navigator.clipboard.writeText(JSON.stringify(backupPayload(), null, 2)).then(function () {
-      setStatus('settings copied');
-    }).catch(function () {
-      setStatus('copy failed');
-    });
-  }
-
-  function pasteSettings() {
-    navigator.clipboard.readText().then(function (text) {
-      applySettings(settingsFromImport(JSON.parse(text)));
-      sendSettings();
-      setStatus('settings pasted');
-    }).catch(function () {
-      setStatus('paste failed');
-    });
-  }
-
-  function previewSearch() {
-    sendSettings();
-    var mode = settings.playlistDialMode === 'track' ? 'track browse' : 'playlist switch';
-    var target = settings.searchQuery || settings.playlistName || 'active playlist';
-    setStatus(mode + ': ' + target);
-  }
-
   function diagnoseSettings() {
     sendSettings();
     var issues = [];
@@ -139,11 +120,13 @@
         socket.close();
       }, 2500);
       socket.onopen = function () {
-        socket.send(JSON.stringify({ command: 'now_playing' }));
+        socket.send(JSON.stringify({ command: 'diagnostics' }));
       };
-      socket.onmessage = function () {
+      socket.onmessage = function (event) {
         clearTimeout(timer);
-        setStatus('component ok');
+        var message = JSON.parse(event.data || '{}');
+        var payload = message.payload || {};
+        setStatus(payload.ok ? 'component ok: ' + (payload.playbackOrder || 'ready') : 'component error');
         socket.close();
       };
       socket.onerror = function () {
@@ -154,12 +137,6 @@
       clearTimeout(timer);
       setStatus('component offline');
     }
-  }
-
-  function resetSettings() {
-    applySettings({ endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 });
-    sendSettings();
-    setStatus('settings reset');
   }
 
   function applySettings(next) {
@@ -249,7 +226,18 @@
   }
 
   function setFieldVisible(id, visible) {
+    var element = document.getElementById(id);
     var row = rowFor(id);
+    if (row && row.classList && row.classList.contains('plugin-settings')) {
+      if (element) element.classList.toggle('is-hidden', !visible);
+      var controls = row.querySelectorAll('.sdpi-button');
+      var anyVisible = false;
+      for (var i = 0; i < controls.length; i++) {
+        if (!controls[i].classList.contains('is-hidden')) anyVisible = true;
+      }
+      row.classList.toggle('is-hidden', !anyVisible);
+      return;
+    }
     if (row) row.classList.toggle('is-hidden', !visible);
   }
 
@@ -257,15 +245,15 @@
     var visible = {};
     var actionFields = ACTION_FIELDS[currentAction];
     if (!currentAction || !actionFields) {
-      SETTING_KEYS.concat(['copySettings', 'previewSearch', 'diagnoseSettings', 'resetSettings', 'pasteSettings', 'exportSettings', 'copyDiagnostics', 'importSettings']).forEach(function (id) {
+      SETTING_KEYS.concat(['diagnoseSettings', 'exportSettings', 'copyDiagnostics', 'importSettingsButton']).forEach(function (id) {
         setFieldVisible(id, true);
       });
       return;
     }
-    COMMON_FIELDS.concat(actionFields).forEach(function (id) {
+    (actionFields.length ? PLUGIN_SETTING_FIELDS : []).concat(actionFields).forEach(function (id) {
       visible[id] = true;
     });
-    SETTING_KEYS.concat(['copySettings', 'previewSearch', 'diagnoseSettings', 'resetSettings', 'pasteSettings', 'exportSettings', 'copyDiagnostics', 'importSettings']).forEach(function (id) {
+    SETTING_KEYS.concat(['diagnoseSettings', 'exportSettings', 'copyDiagnostics', 'importSettingsButton']).forEach(function (id) {
       setFieldVisible(id, !!visible[id]);
     });
   }
@@ -305,11 +293,7 @@
     document.getElementById('searchQuery').addEventListener('input', sendSettings);
     document.getElementById('albumArtUrlTemplate').addEventListener('input', sendSettings);
     document.getElementById('generatedImages').addEventListener('change', sendSettings);
-    document.getElementById('copySettings').addEventListener('click', copySettings);
-    document.getElementById('previewSearch').addEventListener('click', previewSearch);
     document.getElementById('diagnoseSettings').addEventListener('click', diagnoseSettings);
-    document.getElementById('resetSettings').addEventListener('click', resetSettings);
-    document.getElementById('pasteSettings').addEventListener('click', pasteSettings);
     document.getElementById('exportSettings').addEventListener('click', exportSettings);
     document.getElementById('copyDiagnostics').addEventListener('click', copyDiagnostics);
     document.getElementById('importSettings').addEventListener('change', importSettings);
