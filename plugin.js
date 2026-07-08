@@ -71,7 +71,8 @@
     var action = contexts[context] && contexts[context].action;
     if (!lastState.connected) {
       if (action === 'local.streamdock.foobar2000.nowplaying') return 'Now\noffline';
-      return action === 'local.streamdock.foobar2000.diagnostics' ? 'Diag\noffline' : '';
+      if (action === 'local.streamdock.foobar2000.diagnostics') return 'Diag\noffline';
+      return defaultTitleForAction(action);
     }
     if (action === 'local.streamdock.foobar2000.diagnostics') {
       return diagnosticsTitle();
@@ -98,7 +99,7 @@
       return formatVolume();
     }
     if (action === 'local.streamdock.foobar2000.trackknob') {
-      return '';
+      return 'Track';
     }
     if (action === 'local.streamdock.foobar2000.mute') {
       return lastState.muted ? 'Muted' : 'Mute';
@@ -106,7 +107,23 @@
     if (action === 'local.streamdock.foobar2000.playpause') {
       return lastState.playing ? 'Pause' : 'Play';
     }
-    return '';
+    return defaultTitleForAction(action);
+  }
+
+  function defaultTitleForAction(action) {
+    return {
+      'local.streamdock.foobar2000.stop': 'Stop',
+      'local.streamdock.foobar2000.previous': 'Prev',
+      'local.streamdock.foobar2000.next': 'Next',
+      'local.streamdock.foobar2000.volume': 'Vol',
+      'local.streamdock.foobar2000.trackknob': 'Track',
+      'local.streamdock.foobar2000.mute': 'Mute',
+      'local.streamdock.foobar2000.seek': 'Seek',
+      'local.streamdock.foobar2000.playlist': 'List',
+      'local.streamdock.foobar2000.playbackorder': 'Order',
+      'local.streamdock.foobar2000.rating': 'Rate',
+      'local.streamdock.foobar2000.playpause': 'Play'
+    }[action] || '';
   }
 
   function formatNowPlaying() {
