@@ -18,8 +18,9 @@
   var reconnectTimer = null;
   var reconnectDelay = 2000;
   var pendingRating = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
+  var dialTickAccumulators = {};
   var lastState = { connected: false };
 
   function parseJson(value, fallback) {
@@ -92,6 +93,9 @@
     }
     if (action === 'local.streamdock.foobar2000.volume') {
       return formatVolume();
+    }
+    if (action === 'local.streamdock.foobar2000.trackknob') {
+      return 'Track\nnext/prev';
     }
     if (action === 'local.streamdock.foobar2000.mute') {
       return lastState.muted ? 'Muted' : 'Mute';
@@ -186,6 +190,9 @@
     }
     if (action === 'local.streamdock.foobar2000.volume') {
       return svgImage('#234e52', '#ffffff', String(Math.round(lastState.volume || 0)), 'VOL');
+    }
+    if (action === 'local.streamdock.foobar2000.trackknob') {
+      return svgImage('#2d3748', '#ffffff', 'TRK', 'NEXT');
     }
     return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'fb2k', '');
   }
@@ -282,6 +289,10 @@
       if (!sendCommand(command)) {
         showAlert(context);
       }
+    } else if (action === 'local.streamdock.foobar2000.volume') {
+      if (!sendCommand('mute')) {
+        showAlert(context);
+      }
     } else if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
         if (!sendCommand(trackCommand(globalSettings.trackAction))) {
@@ -302,6 +313,16 @@
       }
     } else if (action === 'local.streamdock.foobar2000.diagnostics') {
       setTitle(context, lastState.connected ? 'fb2k\nconnected' : 'fb2k\noffline');
+    }
+  }
+
+  function handleDialDown(message) {
+    var context = message.context;
+    var action = message.action || (contexts[context] && contexts[context].action);
+    if (action === 'local.streamdock.foobar2000.volume') {
+      if (!sendCommand('mute')) {
+        showAlert(context);
+      }
     }
   }
 
@@ -353,6 +374,10 @@
       }
       return;
     }
+    if (action === 'local.streamdock.foobar2000.trackknob') {
+      handleTrackKnobRotate(message.context, ticks);
+      return;
+    }
     var step = Number(globalSettings.volumeStep) || 2;
     if (typeof lastState.volume === 'number') {
       var nextVolume = clampVolume(Number(lastState.volume) + (ticks > 0 ? 1 : -1) * Math.abs(ticks) * step);
@@ -364,6 +389,26 @@
     if (!sendCommand(ticks > 0 ? 'volume_up' : 'volume_down', { amount: Math.abs(ticks) * step })) {
       showAlert(message.context);
     }
+  }
+
+  function handleTrackKnobRotate(context, ticks) {
+    var threshold = Math.max(1, Math.round(Number(globalSettings.trackKnobTicks) || 8));
+    var accumulated = (dialTickAccumulators[context] || 0) + ticks;
+    while (accumulated >= threshold) {
+      if (!sendCommand('next')) {
+        showAlert(context);
+        break;
+      }
+      accumulated -= threshold;
+    }
+    while (accumulated <= -threshold) {
+      if (!sendCommand('previous')) {
+        showAlert(context);
+        break;
+      }
+      accumulated += threshold;
+    }
+    dialTickAccumulators[context] = accumulated;
   }
 
   function clampVolume(value) {
@@ -393,6 +438,7 @@
   function forgetContext(message) {
     if (message.context) {
       delete contexts[message.context];
+      delete dialTickAccumulators[message.context];
     }
   }
 
@@ -404,6 +450,8 @@
       forgetContext(message);
     } else if (message.event === 'keyDown') {
       handleKeyDown(message);
+    } else if (message.event === 'dialDown' || message.event === 'dialPress' || message.event === 'touchTap') {
+      handleDialDown(message);
     } else if (message.event === 'dialRotate') {
       handleDialRotate(message);
     } else if (message.event === 'didReceiveGlobalSettings') {

@@ -1,6 +1,6 @@
 {
   "name": "streamdock-foobar2000",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "scripts": {
     "check": "node --check plugin.js && node --check property-inspector.js && node --check scripts/package-plugin.js && node -e \"JSON.parse(require('fs').readFileSync('manifest.json','utf8'))\"",

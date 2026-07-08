@@ -4,11 +4,12 @@
   var websocket = null;
   var context = null;
   var currentAction = '';
-  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
-  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'playlistName', 'playlistDialMode', 'trackAction', 'rating', 'showProgress', 'nowPlayingTemplate', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
+  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'trackKnobTicks', 'playlistName', 'playlistDialMode', 'trackAction', 'rating', 'showProgress', 'nowPlayingTemplate', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
   var COMMON_FIELDS = ['endpoint', 'generatedImages', 'copySettings', 'diagnoseSettings', 'resetSettings', 'pasteSettings', 'exportSettings', 'copyDiagnostics', 'importSettings'];
   var ACTION_FIELDS = {
     'local.streamdock.foobar2000.volume': ['volumeStep', 'minVolume', 'maxVolume', 'invertKnob'],
+    'local.streamdock.foobar2000.trackknob': ['trackKnobTicks', 'invertKnob'],
     'local.streamdock.foobar2000.seek': ['seekStepSeconds', 'invertKnob'],
     'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery', 'previewSearch'],
     'local.streamdock.foobar2000.rating': ['rating', 'invertKnob'],
@@ -31,6 +32,7 @@
     settings.maxVolume = Number(document.getElementById('maxVolume').value) || 100;
     settings.invertKnob = document.getElementById('invertKnob').checked;
     settings.seekStepSeconds = Number(document.getElementById('seekStepSeconds').value) || 5;
+    settings.trackKnobTicks = Number(document.getElementById('trackKnobTicks').value) || 8;
     settings.playlistName = document.getElementById('playlistName').value.trim();
     settings.playlistDialMode = document.getElementById('playlistDialMode').value;
     settings.trackAction = document.getElementById('trackAction').value;
@@ -155,7 +157,7 @@
   }
 
   function resetSettings() {
-    applySettings({ endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 });
+    applySettings({ endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 });
     sendSettings();
     setStatus('settings reset');
   }
@@ -168,6 +170,7 @@
     document.getElementById('maxVolume').value = settings.maxVolume;
     document.getElementById('invertKnob').checked = settings.invertKnob === true || settings.invertKnob === 'true';
     document.getElementById('seekStepSeconds').value = settings.seekStepSeconds;
+    document.getElementById('trackKnobTicks').value = settings.trackKnobTicks;
     document.getElementById('playlistName').value = settings.playlistName;
     document.getElementById('playlistDialMode').value = settings.playlistDialMode || 'playlist';
     document.getElementById('trackAction').value = settings.trackAction || 'play';
@@ -292,6 +295,7 @@
     document.getElementById('maxVolume').addEventListener('input', sendSettings);
     document.getElementById('invertKnob').addEventListener('change', sendSettings);
     document.getElementById('seekStepSeconds').addEventListener('input', sendSettings);
+    document.getElementById('trackKnobTicks').addEventListener('input', sendSettings);
     document.getElementById('playlistName').addEventListener('input', sendSettings);
     document.getElementById('playlistDialMode').addEventListener('change', sendSettings);
     document.getElementById('trackAction').addEventListener('change', sendSettings);

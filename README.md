@@ -20,11 +20,12 @@ Initial actions:
 - Stop
 - Next
 - Previous
-- Volume up/down
+- Volume knob with press-to-mute
 - Mute
 - Now playing display
 - Now playing position/length display when the component reports timing
 - Seek by knob
+- Track next/previous by knob with configurable tick threshold
 - Playback order command
 - Playlist command
 - Playlist selection, playlist next/previous, and playlist-name search
