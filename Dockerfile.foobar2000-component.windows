@@ -1,0 +1,33 @@
+# escape=`
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+SHELL ["powershell", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+
+ARG VS_BUILDTOOLS_URL=https://aka.ms/vs/17/release/vs_BuildTools.exe
+ARG FOOBAR2000_SDK_URL=https://www.foobar2000.org/downloads/SDK-2025-03-07.7z
+ARG SEVENZIP_URL=https://www.7-zip.org/a/7z2409-x64.exe
+ARG NODE_MSI_URL=https://nodejs.org/dist/v22.16.0/node-v22.16.0-x64.msi
+
+RUN Invoke-WebRequest -Uri $env:VS_BUILDTOOLS_URL -OutFile C:\vs_BuildTools.exe; `
+    Start-Process -FilePath C:\vs_BuildTools.exe -Wait -ArgumentList @('--quiet','--wait','--norestart','--nocache','--installPath','C:\BuildTools','--add','Microsoft.VisualStudio.Workload.VCTools','--add','Microsoft.VisualStudio.Component.VC.Tools.x86.x64','--add','Microsoft.VisualStudio.Component.VC.v142.x86.x64','--add','Microsoft.VisualStudio.Component.VC.ATL','--add','Microsoft.VisualStudio.Component.Windows10SDK.19041'); `
+    if (($LASTEXITCODE -ne 0) -and ($LASTEXITCODE -ne 3010)) { exit $LASTEXITCODE }; `
+    Remove-Item C:\vs_BuildTools.exe -Force
+
+RUN Invoke-WebRequest -Uri $env:SEVENZIP_URL -OutFile C:\7z-installer.exe; `
+    Start-Process -FilePath C:\7z-installer.exe -Wait -ArgumentList @('/S','/D=C:\7zip'); `
+    Remove-Item C:\7z-installer.exe -Force
+
+RUN Invoke-WebRequest -Uri $env:NODE_MSI_URL -OutFile C:\node.msi; `
+    Start-Process -FilePath msiexec.exe -Wait -ArgumentList @('/i','C:\node.msi','/quiet','/norestart'); `
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; `
+    Remove-Item C:\node.msi -Force
+
+RUN New-Item -ItemType Directory -Force C:\foobar2000-sdk | Out-Null; `
+    Invoke-WebRequest -Uri $env:FOOBAR2000_SDK_URL -OutFile C:\foobar2000-sdk.7z; `
+    & C:\7zip\7z.exe x C:\foobar2000-sdk.7z -oC:\foobar2000-sdk -y; `
+    Remove-Item C:\foobar2000-sdk.7z -Force
+
+ENV PATH="C:\BuildTools\MSBuild\Current\Bin;C:\Program Files\nodejs;C:\7zip;${PATH}"
+ENV FOOBAR2000_SDK_ROOT="C:\foobar2000-sdk"
+
+WORKDIR C:\work
