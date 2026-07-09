@@ -32,7 +32,7 @@
 
 DECLARE_COMPONENT_VERSION(
     "foo_streamdock_control",
-    "0.1.0",
+    "0.4.0",
     "Localhost WebSocket control surface for Mirabox Stream Dock.");
 VALIDATE_COMPONENT_FILENAME("foo_streamdock_control.dll");
 
@@ -42,6 +42,23 @@ constexpr unsigned short kPort = 41920;
 constexpr char kWebSocketGuid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 static const GUID kMainMenuGroup = { 0x3ad8ab85, 0x3e39, 0x4e0c, { 0xa6, 0x2d, 0x5e, 0x70, 0x12, 0x81, 0xb0, 0xd7 } };
 static const GUID kMainMenuStatus = { 0xa5c65098, 0x21c8, 0x4c9d, { 0x81, 0x6c, 0x2b, 0xf8, 0x13, 0x5d, 0x0b, 0x96 } };
+
+std::string log_path() {
+    char path[MAX_PATH] = {};
+    const DWORD length = GetTempPathA(MAX_PATH, path);
+    if (length == 0 || length >= MAX_PATH) return "foo_streamdock_control.log";
+    return std::string(path) + "foo_streamdock_control.log";
+}
+
+void debug_log(const std::string& message) {
+    SYSTEMTIME now = {};
+    GetLocalTime(&now);
+    char stamp[64] = {};
+    sprintf_s(stamp, "%04u-%02u-%02u %02u:%02u:%02u.%03u ",
+        now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds);
+    std::ofstream file(log_path(), std::ios::app);
+    if (file) file << stamp << message << "\n";
+}
 
 std::string json_escape(const char* value) {
     std::string out;
@@ -127,7 +144,11 @@ bool send_text_frame(SOCKET socket, const std::string& text) {
         frame.push_back(static_cast<unsigned char>((text.size() >> 8) & 0xff));
         frame.push_back(static_cast<unsigned char>(text.size() & 0xff));
     } else {
-        return false;
+        frame.push_back(127);
+        const unsigned long long size = static_cast<unsigned long long>(text.size());
+        for (int shift = 56; shift >= 0; shift -= 8) {
+            frame.push_back(static_cast<unsigned char>((size >> shift) & 0xff));
+        }
     }
     frame.insert(frame.end(), text.begin(), text.end());
     return send_all(socket, frame.data(), frame.size());
@@ -378,14 +399,24 @@ std::string read_cover_data_url(const std::string& track_path) {
 
 class streamdock_server;
 streamdock_server* g_server = nullptr;
-void broadcast_current_state();
-void request_current_state_broadcast();
+enum class state_update {
+    full,
+    time,
+    playback,
+    volume,
+    metadata,
+    playlist
+};
+void broadcast_current_state(state_update update = state_update::full);
+void request_current_state_broadcast(state_update update = state_update::full);
 void request_diagnostics_broadcast();
 std::mutex g_rating_mutex;
 std::map<std::string, int> g_runtime_ratings;
 std::mutex g_browser_mutex;
 t_size g_playlist_browser_index = 0;
 std::atomic<bool> g_state_callback_pending{ false };
+std::atomic<int> g_pending_state_update{ static_cast<int>(state_update::full) };
+std::atomic<bool> g_runtime_muted{ false };
 
 int rating_for_track(const std::string& track_path) {
     std::lock_guard<std::mutex> lock(g_rating_mutex);
@@ -400,6 +431,24 @@ void set_rating_for_now_playing(int rating) {
     const int normalized = std::max(1, std::min(5, rating));
     std::lock_guard<std::mutex> lock(g_rating_mutex);
     g_runtime_ratings[handle->get_path()] = normalized;
+}
+
+bool get_current_track_handle(metadb_handle_ptr& handle) {
+    static_api_ptr_t<playback_control> playback;
+    if (playback->get_now_playing(handle) && handle.is_valid()) {
+        return true;
+    }
+    static_api_ptr_t<playlist_manager> playlists;
+    t_size playlist = playlists->get_playing_playlist();
+    if (playlist == pfc_infinite || playlist >= playlists->get_playlist_count()) playlist = playlists->get_active_playlist();
+    if (playlist == pfc_infinite || playlist >= playlists->get_playlist_count()) {
+        return false;
+    }
+    t_size item = playlists->playlist_get_focus_item(playlist);
+    if (item == pfc_infinite || item >= playlists->playlist_get_item_count(playlist)) {
+        return false;
+    }
+    return playlists->playlist_get_item_handle(handle, playlist, item) && handle.is_valid();
 }
 
 void adjust_playlist_browser(int delta) {
@@ -447,13 +496,50 @@ std::string browser_track_name(t_size& index, t_size& count) {
     return track_display_name(item);
 }
 
-std::string make_state_json() {
+const char* state_update_name(state_update update) {
+    switch (update) {
+    case state_update::full: return "full";
+    case state_update::time: return "time";
+    case state_update::playback: return "playback";
+    case state_update::volume: return "volume";
+    case state_update::metadata: return "metadata";
+    case state_update::playlist: return "playlist";
+    }
+    return "partial";
+}
+
+bool state_update_includes_playback(state_update update) {
+    return update == state_update::full ||
+        update == state_update::time ||
+        update == state_update::playback ||
+        update == state_update::metadata;
+}
+
+bool state_update_includes_volume(state_update update) {
+    return update == state_update::full || update == state_update::volume;
+}
+
+bool state_update_includes_track(state_update update) {
+    return update == state_update::full || update == state_update::metadata;
+}
+
+bool state_update_includes_playlist(state_update update) {
+    return update == state_update::full || update == state_update::playlist;
+}
+
+std::string make_state_json(state_update update) {
     static_api_ptr_t<playback_control> playback;
-    const bool playing = playback->is_playing();
-    const bool paused = playback->is_paused();
-    const float volume_db = playback->get_volume();
-    const float volume_percent = std::max(0.0f, std::min(100.0f, std::pow(10.0f, volume_db / 20.0f) * 100.0f));
-    const double position = playback->playback_get_position();
+    const bool include_playback = state_update_includes_playback(update);
+    const bool include_volume = state_update_includes_volume(update);
+    const bool include_track = state_update_includes_track(update);
+    const bool include_playlist = state_update_includes_playlist(update);
+    const bool include_length = include_playback || include_track;
+    const bool playing = include_playback ? playback->is_playing() : false;
+    const bool paused = include_playback ? playback->is_paused() : false;
+    const float volume_db = include_volume ? playback->get_volume() : 0.0f;
+    const float volume_percent = include_volume ? std::max(0.0f, std::min(100.0f, std::pow(10.0f, volume_db / 20.0f) * 100.0f)) : 0.0f;
+    const bool muted = include_volume && (g_runtime_muted.load() || volume_db <= -99.0f);
+    const double position = include_playback ? playback->playback_get_position() : 0.0;
     double length = 0;
     pfc::string8 artist;
     pfc::string8 title;
@@ -462,67 +548,101 @@ std::string make_state_json() {
     int rating = 0;
     t_size browse_index = 0;
     t_size browse_count = 0;
-    const std::string playlist = active_playlist_name();
-    const std::string browse_track = browser_track_name(browse_index, browse_count);
+    const std::string playlist = include_playlist ? active_playlist_name() : "";
+    const std::string browse_track = include_playlist ? browser_track_name(browse_index, browse_count) : "";
     metadb_handle_ptr handle;
 
-    if (playback->get_now_playing(handle) && handle.is_valid()) {
+    if ((include_track || include_length) && get_current_track_handle(handle)) {
         length = handle->get_length();
-        file_info_impl info;
-        if (handle->get_info(info)) {
-            const char* artist_value = info.meta_get("artist", 0);
-            const char* title_value = info.meta_get("title", 0);
-            if (artist_value) artist = artist_value;
-            if (title_value) title = title_value;
+        if (include_track) {
+            file_info_impl info;
+            if (handle->get_info(info)) {
+                const char* artist_value = info.meta_get("artist", 0);
+                const char* title_value = info.meta_get("title", 0);
+                if (artist_value) artist = artist_value;
+                if (title_value) title = title_value;
+            }
+            track = handle->get_path();
+            if (update == state_update::full) {
+                image = read_cover_data_url(track.c_str());
+            }
+            rating = rating_for_track(track.c_str());
         }
-        track = handle->get_path();
-        image = read_cover_data_url(track.c_str());
-        rating = rating_for_track(track.c_str());
     }
-
     char volume_text[64] = {};
     sprintf_s(volume_text, "%.2f", volume_db);
     char volume_percent_text[64] = {};
     sprintf_s(volume_percent_text, "%.0f", volume_percent);
-
-    std::string json = "{\"event\":\"state\",\"payload\":{";
-    json += "\"playing\":";
-    json += playing && !paused ? "true" : "false";
-    json += ",\"paused\":";
-    json += paused ? "true" : "false";
-    json += ",\"volumeDb\":";
-    json += volume_text;
-    json += ",\"volume\":";
-    json += volume_percent_text;
     char position_text[64] = {};
     sprintf_s(position_text, "%.0f", std::max(0.0, position));
     char length_text[64] = {};
     sprintf_s(length_text, "%.0f", std::max(0.0, length));
-    json += ",\"positionSeconds\":";
-    json += position_text;
-    json += ",\"lengthSeconds\":";
-    json += length_text;
-    json += ",\"muted\":false";
-    json += ",\"playbackOrder\":\"";
-    json += json_escape(current_playback_order_name().c_str());
-    json += "\",\"playlist\":\"";
-    json += json_escape(playlist.c_str());
-    json += "\",\"browseTrack\":\"";
-    json += json_escape(browse_track.c_str());
-    json += "\",\"browseIndex\":";
-    json += std::to_string(static_cast<unsigned long long>(browse_index));
-    json += ",\"browseCount\":";
-    json += std::to_string(static_cast<unsigned long long>(browse_count));
-    json += ",\"rating\":";
-    json += std::to_string(rating);
-    json += ",\"artist\":\"";
-    json += json_escape(artist.c_str());
-    json += "\",\"title\":\"";
-    json += json_escape(title.c_str());
-    json += "\",\"track\":\"";
-    json += json_escape(track.c_str());
+
+    debug_log(std::string("state update=") + state_update_name(update) +
+        " includeTrack=" + (include_track ? "1" : "0") +
+        " includePlayback=" + (include_playback ? "1" : "0") +
+        " playing=" + (playing ? "1" : "0") +
+        " paused=" + (paused ? "1" : "0") +
+        " playlist=\"" + playlist + "\"" +
+        " artist=\"" + artist.c_str() + "\"" +
+        " title=\"" + title.c_str() + "\"" +
+        " track=\"" + track.c_str() + "\"" +
+        " position=" + position_text +
+        " length=" + length_text +
+        " imageBytes=" + std::to_string(static_cast<unsigned long long>(image.size())));
+
+    std::string json = "{\"event\":\"state\",\"payload\":{";
+    json += "\"stateKind\":\"";
+    json += update == state_update::full ? "full" : "partial";
+    json += "\",\"stateUpdate\":\"";
+    json += state_update_name(update);
     json += "\"";
-    if (!image.empty()) {
+    if (include_playback) {
+        json += ",\"playing\":";
+        json += playing && !paused ? "true" : "false";
+        json += ",\"paused\":";
+        json += paused ? "true" : "false";
+    }
+    if (include_volume) {
+        json += ",\"volumeDb\":";
+        json += volume_text;
+        json += ",\"volume\":";
+        json += volume_percent_text;
+        json += ",\"muted\":";
+        json += muted ? "true" : "false";
+    }
+    if (include_playback) {
+        json += ",\"positionSeconds\":";
+        json += position_text;
+    }
+    if (include_length) {
+        json += ",\"lengthSeconds\":";
+        json += length_text;
+    }
+    if (include_track) {
+        json += ",\"rating\":";
+        json += std::to_string(rating);
+        json += ",\"artist\":\"";
+        json += json_escape(artist.c_str());
+        json += "\",\"title\":\"";
+        json += json_escape(title.c_str());
+        json += "\",\"track\":\"";
+        json += json_escape(track.c_str());
+        json += "\"";
+    }
+    if (include_playlist) {
+        json += ",\"playbackOrder\":\"";
+        json += json_escape(current_playback_order_name().c_str());
+        json += "\",\"playlist\":\"";
+        json += json_escape(playlist.c_str());
+        json += "\",\"browseTrack\":\"";
+        json += json_escape(browse_track.c_str());
+        json += "\",\"browseIndex\":";
+        json += std::to_string(static_cast<unsigned long long>(browse_index));
+        json += ",\"browseCount\":";
+        json += std::to_string(static_cast<unsigned long long>(browse_count));
+    }
+    if (update == state_update::full) {
         json += ",\"image\":\"";
         json += image;
         json += "\"";
@@ -583,45 +703,64 @@ public:
         static_api_ptr_t<playback_control> playback;
         if (m_command == "play_pause") {
             playback->play_or_pause();
+            broadcast_current_state(state_update::playback);
         } else if (m_command == "stop") {
             playback->stop();
+            broadcast_current_state(state_update::playback);
         } else if (m_command == "next") {
             playback->next();
+            broadcast_current_state(state_update::full);
         } else if (m_command == "previous") {
             playback->previous();
+            broadcast_current_state(state_update::full);
         } else if (m_command == "volume_up") {
             for (int i = 0; i < m_amount; i++) playback->volume_up();
+            g_runtime_muted.store(false);
+            broadcast_current_state(state_update::volume);
         } else if (m_command == "volume_down") {
             for (int i = 0; i < m_amount; i++) playback->volume_down();
+            broadcast_current_state(state_update::volume);
         } else if (m_command == "set_volume_percent") {
             const float percent = std::max(0.0f, std::min(100.0f, static_cast<float>(m_value)));
             const float db = percent <= 0.0f ? -100.0f : 20.0f * std::log10(percent / 100.0f);
             playback->set_volume(db);
+            g_runtime_muted.store(percent <= 0.0f);
+            broadcast_current_state(state_update::volume);
         } else if (m_command == "mute") {
             playback->volume_mute_toggle();
+            g_runtime_muted.store(!g_runtime_muted.load());
+            broadcast_current_state(state_update::volume);
         } else if (m_command == "seek_delta") {
             playback->playback_seek_delta(static_cast<double>(m_seconds));
+            broadcast_current_state(state_update::time);
         } else if (m_command == "cycle_playback_order") {
             cycle_playback_order();
+            broadcast_current_state(state_update::playlist);
         } else if (m_command == "playlist_select") {
             select_playlist_by_name(m_name, false);
+            broadcast_current_state(state_update::playlist);
         } else if (m_command == "playlist_next") {
             move_active_playlist(1);
+            broadcast_current_state(state_update::playlist);
         } else if (m_command == "playlist_previous") {
             move_active_playlist(-1);
+            broadcast_current_state(state_update::playlist);
         } else if (m_command == "playlist_search" || m_command == "library_search") {
             select_playlist_by_name(m_query.empty() ? m_name : m_query, true);
+            broadcast_current_state(state_update::playlist);
         } else if (m_command == "playlist_browse_delta") {
             adjust_playlist_browser(m_delta);
+            broadcast_current_state(state_update::playlist);
         } else if (m_command == "playlist_play_selected") {
             play_selected_playlist_item();
+            broadcast_current_state(state_update::full);
         } else if (m_command == "rating_set") {
             set_rating_for_now_playing(m_value);
+            broadcast_current_state(state_update::metadata);
         } else if (m_command == "diagnostics") {
             request_diagnostics_broadcast();
             return;
         }
-        broadcast_current_state();
     }
 
 private:
@@ -707,13 +846,15 @@ private:
             std::lock_guard<std::mutex> lock(m_clients_mutex);
             m_clients.push_back(client);
         }
+        debug_log("client connected count=" + std::to_string(static_cast<unsigned long long>(client_count())));
         request_current_state_broadcast();
 
         std::string text;
         while (m_running && read_text_frame(client, text)) {
             const std::string command = extract_command(text);
+            debug_log("command received command=\"" + command + "\" rawBytes=" + std::to_string(static_cast<unsigned long long>(text.size())));
             if (command == "now_playing") {
-                request_current_state_broadcast();
+                request_current_state_broadcast(state_update::full);
             } else if (command == "diagnostics") {
                 static_api_ptr_t<main_thread_callback_manager> callbacks;
                 callbacks->add_callback(new service_impl_t<command_callback>(command, 1, 0, 0, 0, "", ""));
@@ -735,6 +876,7 @@ private:
             std::lock_guard<std::mutex> lock(m_clients_mutex);
             m_clients.erase(std::remove(m_clients.begin(), m_clients.end(), client), m_clients.end());
         }
+        debug_log("client disconnected");
         closesocket(client);
     }
 
@@ -789,8 +931,9 @@ class state_callback : public main_thread_callback {
 public:
     void callback_run() override {
         g_state_callback_pending.store(false);
+        const state_update update = static_cast<state_update>(g_pending_state_update.exchange(static_cast<int>(state_update::full)));
         if (g_server) {
-            g_server->broadcast(make_state_json());
+            g_server->broadcast(make_state_json(update));
         }
     }
 };
@@ -804,15 +947,18 @@ public:
     }
 };
 
-void broadcast_current_state() {
-    request_current_state_broadcast();
+void broadcast_current_state(state_update update) {
+    request_current_state_broadcast(update);
 }
 
-void request_current_state_broadcast() {
+void request_current_state_broadcast(state_update update) {
     if (g_server) {
         if (!g_state_callback_pending.exchange(true)) {
+            g_pending_state_update.store(static_cast<int>(update));
             static_api_ptr_t<main_thread_callback_manager> callbacks;
             callbacks->add_callback(new service_impl_t<state_callback>());
+        } else if (update == state_update::full) {
+            g_pending_state_update.store(static_cast<int>(state_update::full));
         }
     }
 }
@@ -828,9 +974,11 @@ class streamdock_initquit : public initquit {
 public:
     void on_init() override {
         console::print("Stream Dock Control loaded. Endpoint: ws://127.0.0.1:41920");
+        debug_log("component loaded endpoint=ws://127.0.0.1:41920");
         g_streamdock_server.start();
     }
     void on_quit() override {
+        debug_log("component quitting");
         g_streamdock_server.stop();
     }
 };
@@ -842,19 +990,23 @@ public:
             flag_on_playback_stop |
             flag_on_playback_pause |
             flag_on_volume_change |
+            flag_on_playback_seek |
+            flag_on_playback_edited |
+            flag_on_playback_dynamic_info |
+            flag_on_playback_dynamic_info_track |
             flag_on_playback_time;
     }
 
     void on_playback_starting(play_control::t_track_command, bool) override {}
-    void on_playback_new_track(metadb_handle_ptr) override { broadcast_current_state(); }
-    void on_playback_stop(play_control::t_stop_reason) override { broadcast_current_state(); }
-    void on_playback_seek(double) override {}
-    void on_playback_pause(bool) override { broadcast_current_state(); }
-    void on_playback_edited(metadb_handle_ptr) override { broadcast_current_state(); }
-    void on_playback_dynamic_info(const file_info&) override {}
-    void on_playback_dynamic_info_track(const file_info&) override { broadcast_current_state(); }
-    void on_playback_time(double) override { broadcast_current_state(); }
-    void on_volume_change(float) override { broadcast_current_state(); }
+    void on_playback_new_track(metadb_handle_ptr) override { broadcast_current_state(state_update::full); }
+    void on_playback_stop(play_control::t_stop_reason) override { broadcast_current_state(state_update::playback); }
+    void on_playback_seek(double) override { broadcast_current_state(state_update::time); }
+    void on_playback_pause(bool) override { broadcast_current_state(state_update::playback); }
+    void on_playback_edited(metadb_handle_ptr) override { broadcast_current_state(state_update::metadata); }
+    void on_playback_dynamic_info(const file_info&) override { broadcast_current_state(state_update::metadata); }
+    void on_playback_dynamic_info_track(const file_info&) override { broadcast_current_state(state_update::metadata); }
+    void on_playback_time(double) override { broadcast_current_state(state_update::time); }
+    void on_volume_change(float) override { broadcast_current_state(state_update::volume); }
 };
 
 static mainmenu_group_popup_factory g_streamdock_mainmenu_group(

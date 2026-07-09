@@ -18,7 +18,7 @@
   var reconnectTimer = null;
   var reconnectDelay = 2000;
   var pendingRating = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
   var dialTickAccumulators = {};
   var lastState = { connected: false };
@@ -49,13 +49,19 @@
     sendToStreamDock({
       event: 'setTitle',
       context: context,
-      payload: { title: String(title || '') }
+      payload: { title: String(title || ''), target: 0, state: 0 }
     });
   }
 
   function setImage(context, image) {
     if (context && image) {
-      sendToStreamDock({ event: 'setImage', context: context, payload: { image: image } });
+      sendToStreamDock({ event: 'setImage', context: context, payload: { image: image, target: 0, state: 0 } });
+    }
+  }
+
+  function setState(context) {
+    if (context) {
+      sendToStreamDock({ event: 'setState', context: context, payload: { state: 0 } });
     }
   }
 
@@ -93,6 +99,9 @@
       return 'Rate\n' + ratingStars(r);
     }
     if (action === 'local.streamdock.foobar2000.nowplaying') {
+      if (globalSettings.generatedImages !== false && globalSettings.generatedImages !== 'false') {
+        return '';
+      }
       return formatNowPlaying(context);
     }
     if (action === 'local.streamdock.foobar2000.volume') {
@@ -133,11 +142,15 @@
     if (!lastState.hasState) {
       return 'Now\nwaiting';
     }
+    return nowPlayingText();
+  }
+
+  function nowPlayingText() {
     var artist = lastState.artist || '';
     var title = lastState.title || fileNameFromPath(lastState.track || '');
     var playlist = lastState.playlist || 'Playlist';
     if (globalSettings.nowPlayingTemplate) {
-      return truncateTitle(String(globalSettings.nowPlayingTemplate).replace(/\{(artist|title|track|position|length|volume|playlist)\}/g, function (_, key) {
+      return normalizeTemplateNewlines(globalSettings.nowPlayingTemplate).replace(/\{(artist|title|track|position|length|volume|playlist)\}/g, function (_, key) {
         return {
           artist: artist,
           title: title,
@@ -147,7 +160,7 @@
           volume: Math.round(Number(lastState.volume) || 0) + '%',
           playlist: playlist
         }[key] || '';
-      }));
+      });
     }
     if (!artist && !title) {
       return lastState.playing ? 'Playing' : 'Stopped';
@@ -157,6 +170,10 @@
       line += '\n' + formatTime(lastState.positionSeconds) + '/' + formatTime(lastState.lengthSeconds);
     }
     return line;
+  }
+
+  function normalizeTemplateNewlines(value) {
+    return String(value || '').replace(/\\n/g, '\n');
   }
 
   function fileNameFromPath(value) {
@@ -211,6 +228,19 @@
     });
   }
 
+  function refreshContext(context) {
+    if (!context || !contexts[context]) {
+      return;
+    }
+    setState(context);
+    setTitle(context, titleForContext(context));
+    if (contexts[context].action === 'local.streamdock.foobar2000.nowplaying') {
+      setImage(context, nowPlayingImage());
+    } else if (globalSettings.generatedImages) {
+      setImage(context, actionImage(context));
+    }
+  }
+
   function nowPlayingImage() {
     if (lastState.image) {
       return lastState.image;
@@ -221,7 +251,13 @@
         .replace(/\{title\}/g, encodeURIComponent(lastState.title || lastState.track || ''));
     }
     var fill = Number(lastState.lengthSeconds) > 0 ? Number(lastState.positionSeconds) / Number(lastState.lengthSeconds) * 100 : 0;
-    return svgImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', lastState.playing ? 'PLAY' : 'STOP', lastState.artist || 'NOW', fill);
+    if (!lastState.connected) {
+      return svgTextImage('#3a3a3a', '#ffffff', 'offline', fill);
+    }
+    if (!lastState.hasState) {
+      return svgTextImage('#3a3a3a', '#ffffff', 'waiting', fill);
+    }
+    return svgTextImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', nowPlayingText(), fill);
   }
 
   function actionImage(context) {
@@ -230,7 +266,7 @@
       return svgIconImage('#363b44', '#aeb7c2', iconForAction(action || ''), 0);
     }
     if (action === 'local.streamdock.foobar2000.mute') {
-      return svgIconImage(lastState.muted ? '#742a2a' : '#2d3748', '#ffffff', 'mute', 0);
+      return svgIconImage(lastState.muted ? '#22543d' : '#742a2a', '#ffffff', lastState.muted ? 'volume' : 'mute', 0);
     }
     if (action === 'local.streamdock.foobar2000.volume') {
       return svgIconImage('#234e52', '#ffffff', 'volume', Number(lastState.volume) || 0);
@@ -269,6 +305,30 @@
     return 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
   }
 
+  function svgTextImage(background, foreground, text, fillPercent) {
+    var fill = Math.max(0, Math.min(100, Number(fillPercent) || 0));
+    var barWidth = Math.round(116 * fill / 100);
+    var textLayout = nowPlayingTextLayout();
+    var lines = String(text || '').split(/\r?\n/).map(function (line) {
+      return imageLineLayout(line, textLayout);
+    }).filter(function (line) {
+      return line.text;
+    }).slice(0, 5);
+    if (!lines.length) lines = [''];
+    var fontSize = lines.length <= 3 ? 18 : 15;
+    var lineHeight = lines.length <= 3 ? 23 : 18;
+    var startY = Math.round(72 - ((lines.length - 1) * lineHeight / 2));
+    var textNodes = lines.map(function (line, index) {
+      return '<text x="' + line.x + '" y="' + (startY + index * lineHeight) + '" text-anchor="' + line.anchor + '" font-family="Arial, sans-serif" font-size="' + fontSize + '" font-weight="700" fill="' + foreground + '">' + escapeSvg(line.text) + '</text>';
+    }).join('');
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">' +
+      '<rect width="144" height="144" rx="20" fill="' + background + '"/>' +
+      '<rect x="14" y="124" width="' + barWidth + '" height="8" rx="4" fill="' + foreground + '" opacity="0.32"/>' +
+      textNodes +
+      '</svg>';
+    return 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
+  }
+
   function svgIconImage(background, foreground, icon, fillPercent) {
     var fill = Math.max(0, Math.min(100, Number(fillPercent) || 0));
     var barWidth = Math.round(116 * fill / 100);
@@ -303,6 +363,82 @@
   function truncateImageText(value) {
     value = String(value || '');
     return value.length > 12 ? value.slice(0, 12) : value;
+  }
+
+  function truncateImageLine(value, maxChars) {
+    value = String(value || '');
+    var limit = Math.max(1, Math.min(64, Number(maxChars) || 16));
+    return displayWidth(value) > limit ? truncateByDisplayWidth(value, Math.max(1, limit - 1)) + '…' : value;
+  }
+
+  function nowPlayingTextLayout() {
+    var align = String(globalSettings.nowPlayingTextAlign || 'center').toLowerCase();
+    var maxChars = Number(globalSettings.nowPlayingMaxChars) || 16;
+    if (align === 'auto') {
+      return { x: 72, anchor: 'middle', maxChars: maxChars, auto: true };
+    }
+    if (align === 'left') {
+      return { x: 16, anchor: 'start', maxChars: maxChars };
+    }
+    if (align === 'right') {
+      return { x: 128, anchor: 'end', maxChars: maxChars };
+    }
+    return { x: 72, anchor: 'middle', maxChars: maxChars };
+  }
+
+  function imageLineLayout(value, layout) {
+    var text = String(value || '');
+    var maxChars = Number(layout.maxChars) || 16;
+    var truncated = displayWidth(text) > Math.max(1, Math.min(64, maxChars));
+    var rendered = truncateImageLine(text, maxChars);
+    if (layout.auto && truncated) {
+      return { text: rendered, x: 16, anchor: 'start' };
+    }
+    return { text: rendered, x: layout.x, anchor: layout.anchor };
+  }
+
+  function truncateByDisplayWidth(value, maxWidth) {
+    var result = '';
+    var width = 0;
+    var chars = Array.from(String(value || ''));
+    for (var i = 0; i < chars.length; i++) {
+      var charWidth = displayCharWidth(chars[i]);
+      if (width + charWidth > maxWidth) {
+        break;
+      }
+      result += chars[i];
+      width += charWidth;
+    }
+    return result;
+  }
+
+  function displayWidth(value) {
+    return Array.from(String(value || '')).reduce(function (sum, char) {
+      return sum + displayCharWidth(char);
+    }, 0);
+  }
+
+  function displayCharWidth(char) {
+    var code = char.codePointAt(0);
+    if (code <= 0x1F || (code >= 0x7F && code <= 0x9F)) return 0;
+    if (
+      code >= 0x1100 && (
+        code <= 0x115F ||
+        code === 0x2329 ||
+        code === 0x232A ||
+        (code >= 0x2E80 && code <= 0xA4CF && code !== 0x303F) ||
+        (code >= 0xAC00 && code <= 0xD7A3) ||
+        (code >= 0xF900 && code <= 0xFAFF) ||
+        (code >= 0xFE10 && code <= 0xFE19) ||
+        (code >= 0xFE30 && code <= 0xFE6F) ||
+        (code >= 0xFF00 && code <= 0xFF60) ||
+        (code >= 0xFFE0 && code <= 0xFFE6) ||
+        (code >= 0x1F300 && code <= 0x1FAFF)
+      )
+    ) {
+      return 2;
+    }
+    return 1;
   }
 
   function escapeSvg(value) {
@@ -594,15 +730,23 @@
     return Math.max(min, Math.min(max, Number(value) || 0));
   }
 
+  function actionFromMessage(message) {
+    return message.action ||
+      message.payload && message.payload.action ||
+      message.payload && message.payload.settings && message.payload.settings.action ||
+      message.actionInfo && message.actionInfo.action ||
+      '';
+  }
+
   function rememberContext(message) {
     if (!message.context) {
       return;
     }
     contexts[message.context] = {
-      action: message.action,
+      action: actionFromMessage(message),
       title: message.payload && message.payload.title
     };
-    setTitle(message.context, titleForContext(message.context));
+    refreshContext(message.context);
   }
 
   function forgetContext(message) {
@@ -626,6 +770,7 @@
       handleDialRotate(message);
     } else if (message.event === 'didReceiveGlobalSettings') {
       globalSettings = Object.assign({}, globalSettings, message.payload && message.payload.settings || {});
+      refreshTitles();
       connectHelper();
     }
   }

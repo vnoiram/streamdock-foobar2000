@@ -6,15 +6,17 @@ Primary control must go through a custom foobar2000 component, tentatively `foo_
 
 ## Version
 
-Current version: `0.3.1`.
+Current version: `0.4.0`.
 
-Notable `0.3.1` updates:
+Notable `0.4.0` updates:
 
 - Now Playing no longer renders blank while offline or waiting for the first component state.
+- Now Playing generated text supports multiline templates, text alignment, auto alignment, display-width truncation for Japanese/CJK text and emoji, and per-line width limits.
 - Action buttons show short titles alongside their feature icons.
 - Mute shows the target action, `Mute` or `Unmute`, from the current component state.
 - Command failures are written to the Stream Dock log with action, command, context, and reason.
 - Rating button and Playlist one-step button movement honor the `Invert` option.
+- The bundled `foo_streamdock_control` component reports version `0.4.0`.
 
 Initial actions:
 
@@ -35,6 +37,7 @@ Initial actions:
 - Playlist track browsing: set `Playlist knob` to `Browse tracks`, rotate the Playlist action to choose a track in the active playlist, then press to play it.
 - Playback order cycling
 - Now Playing title template with `{artist}`, `{title}`, `{track}`, `{position}`, `{length}`, `{volume}`, and `{playlist}`
+- Now Playing generated image text alignment and per-line character limit
 - Generated Now Playing image progress bar when album art is not available
 - Invert knob/button direction
 - Min/max volume clamp with absolute component-side volume setting
@@ -56,7 +59,8 @@ ws://127.0.0.1:41920
 Expected component messages:
 
 - Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `volume_up`, `volume_down`, `mute`, `now_playing`, `diagnostics`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `playlist_search`, `library_search`, `playlist_browse_delta`, `playlist_play_selected`, `rating_set`.
-- Component to Dock: `{ "event": "state", "payload": { "playing": true, "artist": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "playlist": "Default", "browseTrack": "...", "browseIndex": 0, "browseCount": 20, "playbackOrder": "Default", "rating": 5, "muted": false } }`.
+- Component to Dock full state: `{ "event": "state", "payload": { "stateKind": "full", "stateUpdate": "full", "playing": true, "artist": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "playlist": "Default", "browseTrack": "...", "browseIndex": 0, "browseCount": 20, "playbackOrder": "Default", "rating": 5, "muted": false, "image": "..." } }`.
+- Component to Dock partial state: `{ "event": "state", "payload": { "stateKind": "partial", "stateUpdate": "time", "playing": true, "paused": false, "positionSeconds": 84, "lengthSeconds": 296 } }`. Partial states only include the changed update area; the plugin keeps previous values for omitted fields.
 - Diagnostics response: `{ "event": "diagnostics", "payload": { "ok": true, "component": "foo_streamdock_control", "endpoint": "ws://127.0.0.1:41920", "clientCount": 1, "playing": true, "paused": false, "playbackOrder": "Default", "playlist": "Default", "artist": "...", "title": "...", "track": "..." } }`.
 
 ## Repository Layout
@@ -84,7 +88,7 @@ The plugin defaults to `ws://127.0.0.1:41920`. Change the endpoint in the Proper
 
 The Property Inspector warns when the component endpoint is not localhost because playback commands and now-playing data will be sent to that endpoint. The bundled component is designed to listen only on `127.0.0.1`.
 
-For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for playlist switching. Pressing Playlist with no playlist name or search query configured moves one playlist forward, or backward when `Invert` is enabled. `Now template` overrides the Now Playing title text; leave it blank for the built-in `playlist\nartist\ntitle` display.
+For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for playlist switching. Pressing Playlist with no playlist name or search query configured moves one playlist forward, or backward when `Invert` is enabled. `Now template` is a multiline template for the Now Playing generated image text; leave it blank for the built-in playlist / artist / title display. Existing templates that use `\n` are also treated as line breaks. `Text align` controls the generated Now Playing image text alignment. `Auto` centers lines that fit within `Max chars` and left-aligns lines that are ellipsized. `Max chars` is a display-width limit before ellipsis; wide Japanese/CJK characters and emoji count wider than ASCII characters.
 
 Build a distributable plugin folder:
 

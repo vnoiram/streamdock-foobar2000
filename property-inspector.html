@@ -66,7 +66,20 @@
     </div>
     <div class="sdpi-item">
       <div class="sdpi-item-label">Now template</div>
-      <input id="nowPlayingTemplate" class="sdpi-item-value" placeholder="{artist}\n{title}">
+      <textarea id="nowPlayingTemplate" class="sdpi-item-value" rows="3" placeholder="{playlist}&#10;{artist}&#10;{title}"></textarea>
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Text align</div>
+      <select id="nowPlayingTextAlign" class="sdpi-item-value">
+        <option value="auto" selected>Auto</option>
+        <option value="left">Left</option>
+        <option value="center">Center</option>
+        <option value="right">Right</option>
+      </select>
+    </div>
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Max chars</div>
+      <input id="nowPlayingMaxChars" class="sdpi-item-value" type="number" min="1" max="64" value="16">
     </div>
     <div class="sdpi-item">
       <div class="sdpi-item-label">Search</div>
