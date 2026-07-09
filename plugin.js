@@ -3,7 +3,6 @@
 
   var DEFAULT_ENDPOINT = 'ws://127.0.0.1:41920';
   var ACTION_COMMANDS = {
-    'local.streamdock.foobar2000.playpause': 'play_pause',
     'local.streamdock.foobar2000.stop': 'stop',
     'local.streamdock.foobar2000.previous': 'previous',
     'local.streamdock.foobar2000.next': 'next',
@@ -18,9 +17,17 @@
   var reconnectTimer = null;
   var reconnectDelay = 2000;
   var pendingRating = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', playPauseLongPressMs: 800, rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, albumArtProvider: 'original', albumArtUrlTemplate: '', spotifyClientId: '', spotifyClientSecret: '', lastfmApiKey: '', searchQuery: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
   var dialTickAccumulators = {};
+  var keyPressStates = {};
+  var playlistPlaybackScoped = false;
+  var artCache = {};
+  var artPending = {};
+  var composedArtCache = {};
+  var composedArtPending = {};
+  var spotifyToken = null;
+  var spotifyTokenExpiresAt = 0;
   var lastState = { connected: false };
   var lastDiagnostics = null;
   var lastStateSummary = '';
@@ -150,9 +157,10 @@
     var title = lastState.title || fileNameFromPath(lastState.track || '');
     var playlist = lastState.playlist || 'Playlist';
     if (globalSettings.nowPlayingTemplate) {
-      return normalizeTemplateNewlines(globalSettings.nowPlayingTemplate).replace(/\{(artist|title|track|position|length|volume|playlist)\}/g, function (_, key) {
+      return normalizeTemplateNewlines(globalSettings.nowPlayingTemplate).replace(/\{(artist|album|title|track|position|length|volume|playlist)\}/g, function (_, key) {
         return {
           artist: artist,
+          album: lastState.album || '',
           title: title,
           track: lastState.track || '',
           position: formatTime(lastState.positionSeconds),
@@ -242,15 +250,46 @@
   }
 
   function nowPlayingImage() {
+    var artwork = nowPlayingArtworkDataUrl();
+    if (artwork) {
+      var renderKey = nowPlayingArtworkRenderKey(artwork);
+      if (Object.prototype.hasOwnProperty.call(composedArtCache, renderKey)) {
+        return composedArtCache[renderKey] || nowPlayingTextOnlyImage();
+      }
+      if (!composedArtPending[renderKey]) {
+        composedArtPending[renderKey] = true;
+        composeNowPlayingArtwork(artwork).then(function (image) {
+          composedArtCache[renderKey] = image || '';
+          delete composedArtPending[renderKey];
+          refreshNowPlayingImages();
+        }).catch(function (error) {
+          composedArtCache[renderKey] = '';
+          delete composedArtPending[renderKey];
+          logMessage('album art compose failed reason=' + String(error && error.message || error || 'unknown'));
+          refreshNowPlayingImages();
+        });
+      }
+      return nowPlayingTextOnlyImage();
+    }
+    return nowPlayingTextOnlyImage();
+  }
+
+  function nowPlayingArtworkDataUrl() {
     if (lastState.image) {
       return lastState.image;
     }
-    if (globalSettings.albumArtUrlTemplate) {
-      return globalSettings.albumArtUrlTemplate
-        .replace(/\{artist\}/g, encodeURIComponent(lastState.artist || ''))
-        .replace(/\{title\}/g, encodeURIComponent(lastState.title || lastState.track || ''));
+    var provider = albumArtProvider();
+    if (provider === 'original' && globalSettings.albumArtUrlTemplate) {
+      return cachedRemoteArtwork(provider, albumArtUrlFromTemplate());
     }
-    var fill = Number(lastState.lengthSeconds) > 0 ? Number(lastState.positionSeconds) / Number(lastState.lengthSeconds) * 100 : 0;
+    if (provider !== 'original') {
+      return externalArtImage();
+    }
+    return '';
+  }
+
+  function nowPlayingTextOnlyImage() {
+    var fill = nowPlayingFillPercent();
     if (!lastState.connected) {
       return svgTextImage('#3a3a3a', '#ffffff', 'offline', fill);
     }
@@ -258,6 +297,118 @@
       return svgTextImage('#3a3a3a', '#ffffff', 'waiting', fill);
     }
     return svgTextImage(lastState.playing ? '#22543d' : '#3a3a3a', '#ffffff', nowPlayingText(), fill);
+  }
+
+  function nowPlayingFillPercent() {
+    return Number(lastState.lengthSeconds) > 0 ? Number(lastState.positionSeconds) / Number(lastState.lengthSeconds) * 100 : 0;
+  }
+
+  function nowPlayingArtworkRenderKey(artwork) {
+    return [
+      artCacheKey(albumArtProvider()) || 'local',
+      String(artwork || '').slice(0, 80),
+      String(artwork || '').length,
+      Math.round(nowPlayingFillPercent()),
+      nowPlayingText()
+    ].join('|');
+  }
+
+  function albumArtUrlFromTemplate() {
+    return globalSettings.albumArtUrlTemplate
+      .replace(/\{artist\}/g, encodeURIComponent(lastState.artist || ''))
+      .replace(/\{title\}/g, encodeURIComponent(lastState.title || lastState.track || ''))
+      .replace(/\{album\}/g, encodeURIComponent(lastState.album || ''));
+  }
+
+  function albumArtProvider() {
+    return String(globalSettings.albumArtProvider || 'original').toLowerCase();
+  }
+
+  function externalArtImage() {
+    var provider = albumArtProvider();
+    if (provider === 'original') {
+      return '';
+    }
+    var key = artCacheKey(provider);
+    if (!key) {
+      return '';
+    }
+    if (Object.prototype.hasOwnProperty.call(artCache, key)) {
+      return artCache[key] || '';
+    }
+    if (!artPending[key]) {
+      artPending[key] = true;
+      fetchExternalArt(provider).then(function (url) {
+        if (!url) {
+          artCache[key] = '';
+          delete artPending[key];
+          logMessage('album art not found provider=' + provider + ' key=' + safeArtLogKey());
+          refreshNowPlayingImages();
+          return '';
+        }
+        return fetchImageDataUrl(url).then(function (dataUrl) {
+          artCache[key] = dataUrl || '';
+          delete artPending[key];
+          logMessage('album art loaded provider=' + provider + ' key=' + safeArtLogKey());
+          refreshNowPlayingImages();
+          return dataUrl;
+        });
+      }).catch(function (error) {
+        artCache[key] = '';
+        delete artPending[key];
+        logMessage('album art failed provider=' + provider + ' reason=' + String(error && error.message || error || 'unknown'));
+        refreshNowPlayingImages();
+      });
+    }
+    return '';
+  }
+
+  function cachedRemoteArtwork(provider, url) {
+    if (!url) return '';
+    var key = artCacheKey(provider) + '|url:' + url;
+    if (Object.prototype.hasOwnProperty.call(artCache, key)) {
+      return artCache[key] || '';
+    }
+    if (!artPending[key]) {
+      artPending[key] = true;
+      fetchImageDataUrl(url).then(function (dataUrl) {
+        artCache[key] = dataUrl || '';
+        delete artPending[key];
+        logMessage('album art loaded provider=' + provider + ' key=' + safeArtLogKey());
+        refreshNowPlayingImages();
+      }).catch(function (error) {
+        artCache[key] = '';
+        delete artPending[key];
+        logMessage('album art failed provider=' + provider + ' reason=' + String(error && error.message || error || 'unknown'));
+        refreshNowPlayingImages();
+      });
+    }
+    return '';
+  }
+
+  function refreshNowPlayingImages() {
+    Object.keys(contexts).forEach(function (context) {
+      if (contexts[context].action === 'local.streamdock.foobar2000.nowplaying') {
+        setImage(context, nowPlayingImage());
+      }
+    });
+  }
+
+  function artCacheKey(provider) {
+    var artist = String(lastState.artist || '').trim();
+    var title = String(lastState.title || fileNameFromPath(lastState.track || '') || '').trim();
+    var album = String(lastState.album || '').trim();
+    if (!artist && !title && !album) {
+      return '';
+    }
+    return [provider, artist.toLowerCase(), title.toLowerCase(), album.toLowerCase()].join('|');
+  }
+
+  function safeArtLogKey() {
+    return [lastState.artist || '', lastState.album || '', lastState.title || fileNameFromPath(lastState.track || '') || '']
+      .filter(function (part) { return String(part || '').trim(); })
+      .join(' / ')
+      .slice(0, 160);
   }
 
   function actionImage(context) {
@@ -292,6 +443,187 @@
     }[action] || 'plugin';
   }
 
+  function fetchExternalArt(provider) {
+    if (provider === 'itunes') return fetchItunesArt();
+    if (provider === 'spotify') return fetchSpotifyArt();
+    if (provider === 'lastfm') return fetchLastfmArt();
+    if (provider === 'deezer') return fetchDeezerArt();
+    if (provider === 'musicbrainz') return fetchMusicBrainzArt();
+    return Promise.resolve('');
+  }
+
+  function artSearchText() {
+    return [lastState.artist || '', lastState.album || '', lastState.title || fileNameFromPath(lastState.track || '') || '']
+      .filter(function (part) { return String(part || '').trim(); })
+      .join(' ');
+  }
+
+  function fetchJson(url, options) {
+    return fetch(url, options || {}).then(function (response) {
+      if (!response || !response.ok) {
+        throw new Error('http ' + String(response && response.status || 0));
+      }
+      return response.json();
+    });
+  }
+
+  function fetchImageDataUrl(url) {
+    url = normalizeImageUrl(url);
+    return fetch(url).then(function (response) {
+      if (!response || !response.ok) {
+        throw new Error('image http ' + String(response && response.status || 0));
+      }
+      var contentType = response.headers && response.headers.get && response.headers.get('content-type') || 'image/jpeg';
+      return response.arrayBuffer().then(function (buffer) {
+        return 'data:' + contentType.split(';')[0] + ';base64,' + arrayBufferToBase64(buffer);
+      });
+    });
+  }
+
+  function arrayBufferToBase64(buffer) {
+    var bytes = new Uint8Array(buffer);
+    var chunkSize = 0x8000;
+    var binary = '';
+    for (var i = 0; i < bytes.length; i += chunkSize) {
+      var chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, chunk);
+    }
+    return btoa(binary);
+  }
+
+  function fetchItunesArt() {
+    var term = artSearchText();
+    if (!term) return Promise.resolve('');
+    var url = 'https://itunes.apple.com/search?media=music&entity=song&limit=5&term=' + encodeURIComponent(term);
+    return fetchJson(url).then(function (json) {
+      var item = json && json.results && json.results[0];
+      if (!item || !item.artworkUrl100) return '';
+      var artwork = String(item.artworkUrl100);
+      var upgraded = artwork.replace(/100x100bb\.(jpg|png)$/i, '600x600bb.$1');
+      return normalizeImageUrl(upgraded || artwork);
+    });
+  }
+
+  function fetchSpotifyToken() {
+    var clientId = String(globalSettings.spotifyClientId || '').trim();
+    var clientSecret = String(globalSettings.spotifyClientSecret || '').trim();
+    if (!clientId || !clientSecret) return Promise.resolve('');
+    if (spotifyToken && Date.now() < spotifyTokenExpiresAt) {
+      return Promise.resolve(spotifyToken);
+    }
+    return fetchJson('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'grant_type=client_credentials'
+    }).then(function (json) {
+      spotifyToken = json && json.access_token || '';
+      spotifyTokenExpiresAt = Date.now() + Math.max(60, Number(json && json.expires_in) || 3600) * 900;
+      return spotifyToken;
+    });
+  }
+
+  function fetchSpotifyArt() {
+    var term = artSearchText();
+    if (!term) return Promise.resolve('');
+    return fetchSpotifyToken().then(function (token) {
+      if (!token) return '';
+      return fetchJson('https://api.spotify.com/v1/search?type=track&limit=1&q=' + encodeURIComponent(term), {
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).then(function (json) {
+        var images = json && json.tracks && json.tracks.items && json.tracks.items[0] &&
+          json.tracks.items[0].album && json.tracks.items[0].album.images || [];
+        return images.length ? normalizeImageUrl(images[0].url || '') : '';
+      });
+    });
+  }
+
+  function fetchLastfmArt() {
+    var apiKey = String(globalSettings.lastfmApiKey || '').trim();
+    var artist = String(lastState.artist || '').trim();
+    var track = String(lastState.title || fileNameFromPath(lastState.track || '') || '').trim();
+    if (!apiKey || !artist || !track) return Promise.resolve('');
+    var url = 'https://ws.audioscrobbler.com/2.0/?method=track.getInfo&format=json&api_key=' +
+      encodeURIComponent(apiKey) + '&artist=' + encodeURIComponent(artist) + '&track=' + encodeURIComponent(track);
+    return fetchJson(url).then(function (json) {
+      var images = json && json.track && json.track.album && json.track.album.image || [];
+      for (var i = images.length - 1; i >= 0; i--) {
+        if (images[i] && images[i]['#text']) return normalizeImageUrl(images[i]['#text']);
+      }
+      return '';
+    });
+  }
+
+  function fetchDeezerArt() {
+    var term = artSearchText();
+    if (!term) return Promise.resolve('');
+    return fetchJson('https://api.deezer.com/search/track?limit=1&q=' + encodeURIComponent(term)).then(function (json) {
+      var item = json && json.data && json.data[0];
+      return normalizeImageUrl(item && item.album && (item.album.cover_xl || item.album.cover_big || item.album.cover_medium) || '');
+    });
+  }
+
+  function fetchMusicBrainzArt() {
+    var artist = String(lastState.artist || '').trim();
+    var track = String(lastState.title || fileNameFromPath(lastState.track || '') || '').trim();
+    if (!artist && !track) return Promise.resolve('');
+    var query = ['artist:"' + artist + '"', 'recording:"' + track + '"'].filter(function (part) {
+      return !/""$/.test(part);
+    }).join(' AND ');
+    var url = 'https://musicbrainz.org/ws/2/recording?fmt=json&limit=1&inc=releases&query=' + encodeURIComponent(query);
+    return fetchJson(url).then(function (json) {
+      var releases = json && json.recordings && json.recordings[0] && json.recordings[0].releases || [];
+      return fetchFirstCoverFromReleases(releases).then(function (coverUrl) {
+        return coverUrl || fetchMusicBrainzReleaseArt();
+      });
+    });
+  }
+
+  function fetchMusicBrainzReleaseArt() {
+    var artist = String(lastState.artist || '').trim();
+    var album = String(lastState.album || '').trim();
+    var title = String(lastState.title || fileNameFromPath(lastState.track || '') || '').trim();
+    var releaseTerm = album || title;
+    if (!releaseTerm) return Promise.resolve('');
+    var query = ['artist:"' + artist + '"', 'release:"' + releaseTerm + '"'].filter(function (part) {
+      return !/""$/.test(part);
+    }).join(' AND ');
+    return fetchJson('https://musicbrainz.org/ws/2/release?fmt=json&limit=1&query=' + encodeURIComponent(query)).then(function (json) {
+      return fetchFirstCoverFromReleases(json && json.releases || []);
+    });
+  }
+
+  function fetchFirstCoverFromReleases(releases) {
+    releases = (releases || []).filter(function (release) { return release && release.id; }).slice(0, 5);
+    var chain = Promise.resolve('');
+    releases.forEach(function (release) {
+      chain = chain.then(function (found) {
+        return found || fetchCoverArtArchiveUrl(release.id);
+      });
+    });
+    return chain;
+  }
+
+  function fetchCoverArtArchiveUrl(releaseId) {
+    return fetchJson('https://coverartarchive.org/release/' + encodeURIComponent(releaseId)).then(function (coverJson) {
+      var images = coverJson && coverJson.images || [];
+      for (var i = 0; i < images.length; i++) {
+        if (images[i] && images[i].front && images[i].thumbnails) {
+          return normalizeImageUrl(images[i].thumbnails.large || images[i].image || '');
+        }
+      }
+      return normalizeImageUrl(images[0] && (images[0].thumbnails && images[0].thumbnails.large || images[0].image) || '');
+    }).catch(function () {
+      return '';
+    });
+  }
+
+  function normalizeImageUrl(url) {
+    return String(url || '').replace(/^http:\/\//i, 'https://');
+  }
+
   function svgImage(background, foreground, main, sub, fillPercent) {
     var fill = Math.max(0, Math.min(100, Number(fillPercent) || 0));
     var barWidth = Math.round(116 * fill / 100);
@@ -314,7 +646,7 @@
     }).filter(function (line) {
       return line.text;
     }).slice(0, 5);
-    if (!lines.length) lines = [''];
+    if (!lines.length) lines = [{ text: '', x: 72, anchor: 'middle' }];
     var fontSize = lines.length <= 3 ? 18 : 15;
     var lineHeight = lines.length <= 3 ? 23 : 18;
     var startY = Math.round(72 - ((lines.length - 1) * lineHeight / 2));
@@ -327,6 +659,127 @@
       textNodes +
       '</svg>';
     return 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
+  }
+
+  function svgArtworkImage(artDataUrl, text, fillPercent) {
+    var fill = Math.max(0, Math.min(100, Number(fillPercent) || 0));
+    var barWidth = Math.round(116 * fill / 100);
+    var textLayout = nowPlayingTextLayout();
+    var lines = String(text || '').split(/\r?\n/).map(function (line) {
+      return imageLineLayout(line, textLayout);
+    }).filter(function (line) {
+      return line.text;
+    }).slice(0, 4);
+    if (!lines.length) lines = [{ text: '', x: 72, anchor: 'middle' }];
+    var fontSize = lines.length <= 3 ? 16 : 14;
+    var lineHeight = lines.length <= 3 ? 19 : 16;
+    var blockHeight = lines.length * lineHeight + 18;
+    var panelY = Math.max(58, 122 - blockHeight);
+    var startY = panelY + 18;
+    var textNodes = lines.map(function (line, index) {
+      return '<text x="' + line.x + '" y="' + (startY + index * lineHeight) + '" text-anchor="' + line.anchor + '" font-family="Arial, sans-serif" font-size="' + fontSize + '" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="2" paint-order="stroke">' + escapeSvg(line.text) + '</text>';
+    }).join('');
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">' +
+      '<defs><linearGradient id="npFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="0.28" stop-color="#000000" stop-opacity="0.32"/><stop offset="1" stop-color="#000000" stop-opacity="0.82"/></linearGradient><clipPath id="npClip"><rect width="144" height="144" rx="20"/></clipPath></defs>' +
+      '<g clip-path="url(#npClip)">' +
+      '<rect width="144" height="144" fill="#20252b"/>' +
+      '<image href="' + escapeSvg(artDataUrl) + '" x="0" y="0" width="144" height="144" preserveAspectRatio="xMidYMid slice"/>' +
+      '<rect x="0" y="' + panelY + '" width="144" height="' + (144 - panelY) + '" fill="url(#npFade)"/>' +
+      '<rect x="14" y="124" width="' + barWidth + '" height="8" rx="4" fill="#ffffff" opacity="0.55"/>' +
+      textNodes +
+      '</g></svg>';
+    return 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
+  }
+
+  function composeNowPlayingArtwork(artDataUrl) {
+    if (typeof document === 'undefined' || !document.createElement || typeof Image === 'undefined') {
+      return Promise.resolve(svgArtworkImage(artDataUrl, nowPlayingText(), nowPlayingFillPercent()));
+    }
+    return loadImage(artDataUrl).then(function (image) {
+      var canvas = document.createElement('canvas');
+      canvas.width = 144;
+      canvas.height = 144;
+      var ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas unavailable');
+      ctx.fillStyle = '#20252b';
+      ctx.fillRect(0, 0, 144, 144);
+      drawCover(ctx, image);
+      drawArtworkOverlay(ctx);
+      return canvas.toDataURL('image/png');
+    });
+  }
+
+  function loadImage(src) {
+    return new Promise(function (resolve, reject) {
+      var image = new Image();
+      image.onload = function () { resolve(image); };
+      image.onerror = function () { reject(new Error('image decode failed')); };
+      image.src = src;
+    });
+  }
+
+  function drawCover(ctx, image) {
+    var width = image.naturalWidth || image.width || 144;
+    var height = image.naturalHeight || image.height || 144;
+    var scale = Math.max(144 / width, 144 / height);
+    var drawWidth = width * scale;
+    var drawHeight = height * scale;
+    ctx.drawImage(image, (144 - drawWidth) / 2, (144 - drawHeight) / 2, drawWidth, drawHeight);
+  }
+
+  function drawArtworkOverlay(ctx) {
+    var lines = String(nowPlayingText() || '').split(/\r?\n/).map(function (line) {
+      return imageLineLayout(line, nowPlayingTextLayout());
+    }).filter(function (line) {
+      return line.text;
+    }).slice(0, 4);
+    if (!lines.length) lines = [{ text: '', x: 72, anchor: 'middle' }];
+    var fontSize = lines.length <= 3 ? 16 : 14;
+    var lineHeight = lines.length <= 3 ? 19 : 16;
+    var blockHeight = lines.length * lineHeight + 18;
+    var panelY = Math.max(58, 122 - blockHeight);
+    var gradient = ctx.createLinearGradient(0, panelY, 0, 144);
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(0.28, 'rgba(0,0,0,0.35)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.84)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, panelY, 144, 144 - panelY);
+
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.font = '700 ' + fontSize + 'px Arial, sans-serif';
+    ctx.textBaseline = 'alphabetic';
+    lines.forEach(function (line, index) {
+      ctx.textAlign = line.anchor === 'start' ? 'left' : line.anchor === 'end' ? 'right' : 'center';
+      var y = panelY + 18 + index * lineHeight;
+      ctx.strokeStyle = 'rgba(0,0,0,0.82)';
+      ctx.strokeText(line.text, line.x, y);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(line.text, line.x, y);
+    });
+
+    var fill = Math.max(0, Math.min(100, Number(nowPlayingFillPercent()) || 0));
+    ctx.globalAlpha = 0.58;
+    ctx.fillStyle = '#ffffff';
+    roundRect(ctx, 14, 124, Math.round(116 * fill / 100), 8, 4);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function roundRect(ctx, x, y, width, height, radius) {
+    if (width <= 0 || height <= 0) return;
+    radius = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
   }
 
   function svgIconImage(background, foreground, icon, fillPercent) {
@@ -564,6 +1017,18 @@
   function handleKeyDown(message) {
     var context = message.context;
     var action = message.action || (contexts[context] && contexts[context].action);
+    if (action === 'local.streamdock.foobar2000.playpause') {
+      startPlayPausePress(context, action);
+      return;
+    }
+    if (action === 'local.streamdock.foobar2000.next' && playlistPlaybackScoped) {
+      if (!sendActionCommand(context, action, 'playlist_next_track')) showAlert(context);
+      return;
+    }
+    if (action === 'local.streamdock.foobar2000.previous' && playlistPlaybackScoped) {
+      if (!sendActionCommand(context, action, 'playlist_previous_track')) showAlert(context);
+      return;
+    }
     var command = ACTION_COMMANDS[action];
     if (command) {
       if (!sendActionCommand(context, action, command)) {
@@ -576,6 +1041,7 @@
     } else if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
         command = trackCommand(globalSettings.trackAction);
+        playlistPlaybackScoped = true;
         if (!sendActionCommand(context, action, command)) {
           showAlert(context);
         }
@@ -583,12 +1049,14 @@
       }
       if (!globalSettings.searchQuery && !globalSettings.playlistName) {
         command = (globalSettings.invertKnob === true || globalSettings.invertKnob === 'true') ? 'playlist_previous' : 'playlist_next';
+        playlistPlaybackScoped = true;
         if (!sendActionCommand(context, action, command)) {
           showAlert(context);
         }
         return;
       }
       command = globalSettings.searchQuery ? 'playlist_search' : 'playlist_select';
+      playlistPlaybackScoped = true;
       if (!sendActionCommand(context, action, command, { name: globalSettings.playlistName, query: globalSettings.searchQuery })) {
         showAlert(context);
       }
@@ -614,6 +1082,58 @@
     }
   }
 
+  function handleKeyUp(message) {
+    var context = message.context;
+    var action = message.action || (contexts[context] && contexts[context].action);
+    if (action !== 'local.streamdock.foobar2000.playpause') {
+      return;
+    }
+    finishPlayPausePress(context, action);
+  }
+
+  function startPlayPausePress(context, action) {
+    clearPlayPausePress(context);
+    var threshold = playPauseLongPressMs();
+    keyPressStates[context] = {
+      consumed: false,
+      timer: setTimeout(function () {
+        if (!keyPressStates[context]) {
+          return;
+        }
+        keyPressStates[context].consumed = true;
+        if (!sendActionCommand(context, action, 'stop')) {
+          showAlert(context);
+        }
+      }, threshold)
+    };
+  }
+
+  function finishPlayPausePress(context, action) {
+    var state = keyPressStates[context];
+    if (!state) {
+      return;
+    }
+    clearTimeout(state.timer);
+    delete keyPressStates[context];
+    var command = playlistPlaybackScoped ? 'playlist_play_pause' : 'play_pause';
+    if (!state.consumed && !sendActionCommand(context, action, command)) {
+      showAlert(context);
+    }
+  }
+
+  function clearPlayPausePress(context) {
+    if (keyPressStates[context] && keyPressStates[context].timer) {
+      clearTimeout(keyPressStates[context].timer);
+    }
+    delete keyPressStates[context];
+  }
+
+  function playPauseLongPressMs() {
+    var value = Number(globalSettings.playPauseLongPressMs);
+    if (!Number.isFinite(value) || value <= 0) value = 800;
+    return Math.max(300, Math.min(3000, Math.round(value)));
+  }
+
   function handleDialDown(message) {
     var context = message.context;
     var action = message.action || (contexts[context] && contexts[context].action);
@@ -625,6 +1145,14 @@
     }
     if (action === 'local.streamdock.foobar2000.trackknob') {
       if (!sendActionCommand(context, action, 'play_pause')) {
+        showAlert(context);
+      }
+      return;
+    }
+    if (action === 'local.streamdock.foobar2000.playlist') {
+      var command = globalSettings.playlistDialMode === 'track' ? trackCommand(globalSettings.trackAction) : 'playlist_play_active';
+      playlistPlaybackScoped = true;
+      if (!sendActionCommand(context, action, command)) {
         showAlert(context);
       }
     }
@@ -655,12 +1183,14 @@
     }
     if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
+        playlistPlaybackScoped = true;
         if (!sendActionCommand(message.context, action, 'playlist_browse_delta', { delta: ticks })) {
           showAlert(message.context);
         }
         return;
       }
       var playlistCommand = ticks > 0 ? 'playlist_next' : 'playlist_previous';
+      playlistPlaybackScoped = true;
       if (!sendActionCommand(message.context, action, playlistCommand)) {
         showAlert(message.context);
       }
@@ -751,6 +1281,7 @@
 
   function forgetContext(message) {
     if (message.context) {
+      clearPlayPausePress(message.context);
       delete contexts[message.context];
       delete dialTickAccumulators[message.context];
     }
@@ -764,12 +1295,20 @@
       forgetContext(message);
     } else if (message.event === 'keyDown') {
       handleKeyDown(message);
+    } else if (message.event === 'keyUp') {
+      handleKeyUp(message);
     } else if (message.event === 'dialDown' || message.event === 'dialPress' || message.event === 'touchTap') {
       handleDialDown(message);
     } else if (message.event === 'dialRotate') {
       handleDialRotate(message);
     } else if (message.event === 'didReceiveGlobalSettings') {
       globalSettings = Object.assign({}, globalSettings, message.payload && message.payload.settings || {});
+      artCache = {};
+      artPending = {};
+      composedArtCache = {};
+      composedArtPending = {};
+      spotifyToken = null;
+      spotifyTokenExpiresAt = 0;
       refreshTitles();
       connectHelper();
     }

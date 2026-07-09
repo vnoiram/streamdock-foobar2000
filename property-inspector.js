@@ -4,12 +4,12 @@
   var websocket = null;
   var context = null;
   var currentAction = '';
-  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, searchQuery: '', albumArtUrlTemplate: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
-  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'trackKnobTicks', 'playlistName', 'playlistDialMode', 'trackAction', 'rating', 'showProgress', 'nowPlayingTemplate', 'nowPlayingTextAlign', 'nowPlayingMaxChars', 'searchQuery', 'albumArtUrlTemplate', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
+  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', playPauseLongPressMs: 800, rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, albumArtProvider: 'original', albumArtUrlTemplate: '', spotifyClientId: '', spotifyClientSecret: '', lastfmApiKey: '', searchQuery: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'trackKnobTicks', 'playlistName', 'playlistDialMode', 'trackAction', 'playPauseLongPressMs', 'rating', 'showProgress', 'nowPlayingTemplate', 'nowPlayingTextAlign', 'nowPlayingMaxChars', 'albumArtProvider', 'albumArtUrlTemplate', 'spotifyClientId', 'spotifyClientSecret', 'lastfmApiKey', 'searchQuery', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
   var PLUGIN_SETTING_FIELDS = ['exportSettings', 'importSettingsButton'];
   var DIAGNOSTIC_FIELDS = ['endpoint', 'diagnoseSettings', 'copyDiagnostics'];
   var ACTION_FIELDS = {
-    'local.streamdock.foobar2000.playpause': [],
+    'local.streamdock.foobar2000.playpause': ['playPauseLongPressMs'],
     'local.streamdock.foobar2000.stop': [],
     'local.streamdock.foobar2000.previous': [],
     'local.streamdock.foobar2000.next': [],
@@ -20,7 +20,7 @@
     'local.streamdock.foobar2000.seek': ['seekStepSeconds', 'invertKnob'],
     'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery', 'invertKnob'],
     'local.streamdock.foobar2000.rating': ['invertKnob'],
-    'local.streamdock.foobar2000.nowplaying': ['showProgress', 'nowPlayingTemplate', 'nowPlayingTextAlign', 'nowPlayingMaxChars', 'albumArtUrlTemplate'],
+    'local.streamdock.foobar2000.nowplaying': ['showProgress', 'nowPlayingTemplate', 'nowPlayingTextAlign', 'nowPlayingMaxChars', 'albumArtProvider', 'albumArtUrlTemplate', 'spotifyClientId', 'spotifyClientSecret', 'lastfmApiKey'],
     'local.streamdock.foobar2000.diagnostics': DIAGNOSTIC_FIELDS
   };
 
@@ -43,11 +43,16 @@
     settings.playlistName = document.getElementById('playlistName').value.trim();
     settings.playlistDialMode = document.getElementById('playlistDialMode').value;
     settings.trackAction = document.getElementById('trackAction').value;
+    settings.playPauseLongPressMs = Number(document.getElementById('playPauseLongPressMs').value) || 800;
     settings.rating = Number(document.getElementById('rating').value) || 5;
     settings.showProgress = document.getElementById('showProgress').checked;
     settings.nowPlayingTemplate = document.getElementById('nowPlayingTemplate').value;
     settings.nowPlayingTextAlign = document.getElementById('nowPlayingTextAlign').value || 'center';
     settings.nowPlayingMaxChars = Number(document.getElementById('nowPlayingMaxChars').value) || 16;
+    settings.albumArtProvider = document.getElementById('albumArtProvider').value || 'original';
+    settings.spotifyClientId = document.getElementById('spotifyClientId').value.trim();
+    settings.spotifyClientSecret = document.getElementById('spotifyClientSecret').value.trim();
+    settings.lastfmApiKey = document.getElementById('lastfmApiKey').value.trim();
     settings.searchQuery = document.getElementById('searchQuery').value.trim();
     settings.albumArtUrlTemplate = document.getElementById('albumArtUrlTemplate').value.trim();
     settings.generatedImages = document.getElementById('generatedImages').checked;
@@ -153,15 +158,21 @@
     document.getElementById('playlistName').value = settings.playlistName;
     document.getElementById('playlistDialMode').value = settings.playlistDialMode || 'playlist';
     document.getElementById('trackAction').value = settings.trackAction || 'play';
+    document.getElementById('playPauseLongPressMs').value = settings.playPauseLongPressMs || 800;
     document.getElementById('rating').value = settings.rating;
     document.getElementById('showProgress').checked = settings.showProgress !== false && settings.showProgress !== 'false';
     document.getElementById('nowPlayingTemplate').value = settings.nowPlayingTemplate || '';
     document.getElementById('nowPlayingTextAlign').value = settings.nowPlayingTextAlign || 'auto';
     document.getElementById('nowPlayingMaxChars').value = settings.nowPlayingMaxChars || 16;
+    document.getElementById('albumArtProvider').value = settings.albumArtProvider || 'original';
     document.getElementById('searchQuery').value = settings.searchQuery || '';
     document.getElementById('albumArtUrlTemplate').value = settings.albumArtUrlTemplate || '';
+    document.getElementById('spotifyClientId').value = settings.spotifyClientId || '';
+    document.getElementById('spotifyClientSecret').value = settings.spotifyClientSecret || '';
+    document.getElementById('lastfmApiKey').value = settings.lastfmApiKey || '';
     document.getElementById('generatedImages').checked = settings.generatedImages !== false && settings.generatedImages !== 'false';
     renderEndpointStatus();
+    renderArtProviderFields();
   }
 
   function mergeKnownSettings(target, source) {
@@ -260,6 +271,17 @@
     SETTING_KEYS.concat(['diagnoseSettings', 'exportSettings', 'copyDiagnostics', 'importSettingsButton']).forEach(function (id) {
       setFieldVisible(id, !!visible[id]);
     });
+    renderArtProviderFields();
+  }
+
+  function renderArtProviderFields() {
+    var providerElement = document.getElementById('albumArtProvider');
+    var provider = providerElement ? providerElement.value : settings.albumArtProvider || 'original';
+    var isNowPlaying = currentAction === 'local.streamdock.foobar2000.nowplaying';
+    setFieldVisible('albumArtUrlTemplate', isNowPlaying && provider === 'original');
+    setFieldVisible('spotifyClientId', isNowPlaying && provider === 'spotify');
+    setFieldVisible('spotifyClientSecret', isNowPlaying && provider === 'spotify');
+    setFieldVisible('lastfmApiKey', isNowPlaying && provider === 'lastfm');
   }
 
   window.connectElgatoStreamDeckSocket = function (port, uuid, registerEvent, info, actionInfo) {
@@ -291,13 +313,21 @@
     document.getElementById('playlistName').addEventListener('input', sendSettings);
     document.getElementById('playlistDialMode').addEventListener('change', sendSettings);
     document.getElementById('trackAction').addEventListener('change', sendSettings);
+    document.getElementById('playPauseLongPressMs').addEventListener('input', sendSettings);
     document.getElementById('rating').addEventListener('input', sendSettings);
     document.getElementById('showProgress').addEventListener('change', sendSettings);
     document.getElementById('nowPlayingTemplate').addEventListener('input', sendSettings);
     document.getElementById('nowPlayingTextAlign').addEventListener('change', sendSettings);
     document.getElementById('nowPlayingMaxChars').addEventListener('input', sendSettings);
     document.getElementById('searchQuery').addEventListener('input', sendSettings);
+    document.getElementById('albumArtProvider').addEventListener('change', function () {
+      sendSettings();
+      renderArtProviderFields();
+    });
     document.getElementById('albumArtUrlTemplate').addEventListener('input', sendSettings);
+    document.getElementById('spotifyClientId').addEventListener('input', sendSettings);
+    document.getElementById('spotifyClientSecret').addEventListener('input', sendSettings);
+    document.getElementById('lastfmApiKey').addEventListener('input', sendSettings);
     document.getElementById('generatedImages').addEventListener('change', sendSettings);
     document.getElementById('diagnoseSettings').addEventListener('click', diagnoseSettings);
     document.getElementById('exportSettings').addEventListener('click', exportSettings);

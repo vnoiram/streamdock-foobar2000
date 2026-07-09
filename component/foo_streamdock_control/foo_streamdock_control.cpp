@@ -32,7 +32,7 @@
 
 DECLARE_COMPONENT_VERSION(
     "foo_streamdock_control",
-    "0.4.0",
+    "0.5.0",
     "Localhost WebSocket control surface for Mirabox Stream Dock.");
 VALIDATE_COMPONENT_FILENAME("foo_streamdock_control.dll");
 
@@ -478,6 +478,57 @@ void play_selected_playlist_item() {
     playlists->playlist_execute_default_action(active, index);
 }
 
+void play_active_playlist_item() {
+    static_api_ptr_t<playlist_manager> playlists;
+    const t_size active = playlists->get_active_playlist();
+    if (active == pfc_infinite || active >= playlists->get_playlist_count()) return;
+    const t_size count = playlists->playlist_get_item_count(active);
+    if (count == 0) return;
+    t_size index = playlists->playlist_get_focus_item(active);
+    if (index == pfc_infinite || index >= count) index = 0;
+    playlists->set_playing_playlist(active);
+    playlists->playlist_execute_default_action(active, index);
+}
+
+void play_pause_active_playlist() {
+    static_api_ptr_t<playlist_manager> playlists;
+    static_api_ptr_t<playback_control> playback;
+    const t_size active = playlists->get_active_playlist();
+    if (active == pfc_infinite || active >= playlists->get_playlist_count()) return;
+    playlists->set_playing_playlist(active);
+    if (playback->is_playing()) {
+        playback->play_or_pause();
+    } else {
+        play_active_playlist_item();
+    }
+}
+
+void next_active_playlist() {
+    static_api_ptr_t<playlist_manager> playlists;
+    static_api_ptr_t<playback_control> playback;
+    const t_size active = playlists->get_active_playlist();
+    if (active == pfc_infinite || active >= playlists->get_playlist_count()) return;
+    playlists->set_playing_playlist(active);
+    if (playback->is_playing()) {
+        playback->next();
+    } else {
+        play_active_playlist_item();
+    }
+}
+
+void previous_active_playlist() {
+    static_api_ptr_t<playlist_manager> playlists;
+    static_api_ptr_t<playback_control> playback;
+    const t_size active = playlists->get_active_playlist();
+    if (active == pfc_infinite || active >= playlists->get_playlist_count()) return;
+    playlists->set_playing_playlist(active);
+    if (playback->is_playing()) {
+        playback->previous();
+    } else {
+        play_active_playlist_item();
+    }
+}
+
 std::string browser_track_name(t_size& index, t_size& count) {
     static_api_ptr_t<playlist_manager> playlists;
     const t_size active = playlists->get_active_playlist();
@@ -542,6 +593,7 @@ std::string make_state_json(state_update update) {
     const double position = include_playback ? playback->playback_get_position() : 0.0;
     double length = 0;
     pfc::string8 artist;
+    pfc::string8 album;
     pfc::string8 title;
     pfc::string8 track;
     std::string image;
@@ -558,8 +610,10 @@ std::string make_state_json(state_update update) {
             file_info_impl info;
             if (handle->get_info(info)) {
                 const char* artist_value = info.meta_get("artist", 0);
+                const char* album_value = info.meta_get("album", 0);
                 const char* title_value = info.meta_get("title", 0);
                 if (artist_value) artist = artist_value;
+                if (album_value) album = album_value;
                 if (title_value) title = title_value;
             }
             track = handle->get_path();
@@ -585,6 +639,7 @@ std::string make_state_json(state_update update) {
         " paused=" + (paused ? "1" : "0") +
         " playlist=\"" + playlist + "\"" +
         " artist=\"" + artist.c_str() + "\"" +
+        " album=\"" + album.c_str() + "\"" +
         " title=\"" + title.c_str() + "\"" +
         " track=\"" + track.c_str() + "\"" +
         " position=" + position_text +
@@ -624,6 +679,8 @@ std::string make_state_json(state_update update) {
         json += std::to_string(rating);
         json += ",\"artist\":\"";
         json += json_escape(artist.c_str());
+        json += "\",\"album\":\"";
+        json += json_escape(album.c_str());
         json += "\",\"title\":\"";
         json += json_escape(title.c_str());
         json += "\",\"track\":\"";
@@ -713,6 +770,15 @@ public:
         } else if (m_command == "previous") {
             playback->previous();
             broadcast_current_state(state_update::full);
+        } else if (m_command == "playlist_play_pause") {
+            play_pause_active_playlist();
+            broadcast_current_state(state_update::full);
+        } else if (m_command == "playlist_next_track") {
+            next_active_playlist();
+            broadcast_current_state(state_update::full);
+        } else if (m_command == "playlist_previous_track") {
+            previous_active_playlist();
+            broadcast_current_state(state_update::full);
         } else if (m_command == "volume_up") {
             for (int i = 0; i < m_amount; i++) playback->volume_up();
             g_runtime_muted.store(false);
@@ -753,6 +819,9 @@ public:
             broadcast_current_state(state_update::playlist);
         } else if (m_command == "playlist_play_selected") {
             play_selected_playlist_item();
+            broadcast_current_state(state_update::full);
+        } else if (m_command == "playlist_play_active") {
+            play_active_playlist_item();
             broadcast_current_state(state_update::full);
         } else if (m_command == "rating_set") {
             set_rating_for_now_playing(m_value);
@@ -901,6 +970,9 @@ private:
             command == "stop" ||
             command == "next" ||
             command == "previous" ||
+            command == "playlist_play_pause" ||
+            command == "playlist_next_track" ||
+            command == "playlist_previous_track" ||
             command == "volume_up" ||
             command == "volume_down" ||
             command == "set_volume_percent" ||
@@ -914,6 +986,7 @@ private:
             command == "playlist_search" ||
             command == "playlist_browse_delta" ||
             command == "playlist_play_selected" ||
+            command == "playlist_play_active" ||
             command == "diagnostics" ||
             command == "library_search";
     }

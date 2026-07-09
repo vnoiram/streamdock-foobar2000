@@ -6,21 +6,20 @@ Primary control must go through a custom foobar2000 component, tentatively `foo_
 
 ## Version
 
-Current version: `0.4.0`.
+Current version: `0.5.0`.
 
-Notable `0.4.0` updates:
+Notable `0.5.0` updates:
 
-- Now Playing no longer renders blank while offline or waiting for the first component state.
-- Now Playing generated text supports multiline templates, text alignment, auto alignment, display-width truncation for Japanese/CJK text and emoji, and per-line width limits.
-- Action buttons show short titles alongside their feature icons.
-- Mute shows the target action, `Mute` or `Unmute`, from the current component state.
-- Command failures are written to the Stream Dock log with action, command, context, and reason.
-- Rating button and Playlist one-step button movement honor the `Invert` option.
-- The bundled `foo_streamdock_control` component reports version `0.4.0`.
+- Play/Pause supports configurable long-press stop, defaulting to 800 ms.
+- Now Playing album art can be resolved from an original URL template, iTunes, Spotify, Last.fm, Deezer, or MusicBrainz / Cover Art Archive and merged with the Now Playing text overlay.
+- Playlist knob press starts playback in the active playlist, and Play/Pause, Next, and Previous can follow the playlist selected by Playlist controls.
+- Now Playing templates support `{album}`.
+- The bundled `foo_streamdock_control` component reports version `0.5.0`.
 
 Initial actions:
 
 - Play/pause
+- Play/pause with long-press stop
 - Stop
 - Next
 - Previous
@@ -34,15 +33,17 @@ Initial actions:
 - Playlist command
 - Playlist button one-step next/previous when no playlist name or search query is configured
 - Playlist selection, playlist next/previous, and playlist-name search
+- Playlist knob press starts playback in the active playlist. After using Playlist controls, Play/Pause, Next, and Previous operate within that active playlist.
 - Playlist track browsing: set `Playlist knob` to `Browse tracks`, rotate the Playlist action to choose a track in the active playlist, then press to play it.
 - Playback order cycling
-- Now Playing title template with `{artist}`, `{title}`, `{track}`, `{position}`, `{length}`, `{volume}`, and `{playlist}`
+- Now Playing title template with `{artist}`, `{album}`, `{title}`, `{track}`, `{position}`, `{length}`, `{volume}`, and `{playlist}`
 - Now Playing generated image text alignment and per-line character limit
 - Generated Now Playing image progress bar when album art is not available
 - Invert knob/button direction
 - Min/max volume clamp with absolute component-side volume setting
 - Generated key images for playback, mute, volume, and offline states
-- Optional album-art URL template for Now Playing images, using `{artist}` and `{title}` placeholders
+- Optional album-art URL template for Now Playing images, using `{artist}`, `{album}`, and `{title}` placeholders
+- Optional external album-art providers for Now Playing images: iTunes, Spotify, Last.fm, Deezer, and MusicBrainz / Cover Art Archive. Provider art is merged with the Now Playing text overlay.
 - Local folder album art for Now Playing images. The component looks beside the playing file for `cover`, `folder`, `front`, or `album` images in JPG, PNG, or WebP format and sends a data URL to the plugin.
 - Runtime per-track rating command for Stream Dock display
 - Diagnostics action
@@ -58,8 +59,8 @@ ws://127.0.0.1:41920
 
 Expected component messages:
 
-- Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `volume_up`, `volume_down`, `mute`, `now_playing`, `diagnostics`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `playlist_search`, `library_search`, `playlist_browse_delta`, `playlist_play_selected`, `rating_set`.
-- Component to Dock full state: `{ "event": "state", "payload": { "stateKind": "full", "stateUpdate": "full", "playing": true, "artist": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "playlist": "Default", "browseTrack": "...", "browseIndex": 0, "browseCount": 20, "playbackOrder": "Default", "rating": 5, "muted": false, "image": "..." } }`.
+- Dock to component: `{ "command": "play_pause" }`, `stop`, `next`, `previous`, `playlist_play_pause`, `playlist_next_track`, `playlist_previous_track`, `volume_up`, `volume_down`, `mute`, `now_playing`, `diagnostics`, `seek_delta`, `cycle_playback_order`, `playlist_select`, `playlist_next`, `playlist_previous`, `playlist_search`, `library_search`, `playlist_browse_delta`, `playlist_play_selected`, `playlist_play_active`, `rating_set`.
+- Component to Dock full state: `{ "event": "state", "payload": { "stateKind": "full", "stateUpdate": "full", "playing": true, "artist": "...", "album": "...", "title": "...", "volume": 50, "positionSeconds": 83, "lengthSeconds": 296, "playlist": "Default", "browseTrack": "...", "browseIndex": 0, "browseCount": 20, "playbackOrder": "Default", "rating": 5, "muted": false, "image": "..." } }`.
 - Component to Dock partial state: `{ "event": "state", "payload": { "stateKind": "partial", "stateUpdate": "time", "playing": true, "paused": false, "positionSeconds": 84, "lengthSeconds": 296 } }`. Partial states only include the changed update area; the plugin keeps previous values for omitted fields.
 - Diagnostics response: `{ "event": "diagnostics", "payload": { "ok": true, "component": "foo_streamdock_control", "endpoint": "ws://127.0.0.1:41920", "clientCount": 1, "playing": true, "paused": false, "playbackOrder": "Default", "playlist": "Default", "artist": "...", "title": "...", "track": "..." } }`.
 
@@ -88,7 +89,7 @@ The plugin defaults to `ws://127.0.0.1:41920`. Change the endpoint in the Proper
 
 The Property Inspector warns when the component endpoint is not localhost because playback commands and now-playing data will be sent to that endpoint. The bundled component is designed to listen only on `127.0.0.1`.
 
-For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for playlist switching. Pressing Playlist with no playlist name or search query configured moves one playlist forward, or backward when `Invert` is enabled. `Now template` is a multiline template for the Now Playing generated image text; leave it blank for the built-in playlist / artist / title display. Existing templates that use `\n` are also treated as line breaks. `Text align` controls the generated Now Playing image text alignment. `Auto` centers lines that fit within `Max chars` and left-aligns lines that are ellipsized. `Max chars` is a display-width limit before ellipsis; wide Japanese/CJK characters and emoji count wider than ASCII characters.
+For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for playlist switching; pressing the playlist knob starts playback from the active playlist's focused item, or the first item if nothing is focused. Pressing Playlist with no playlist name or search query configured moves one playlist forward, or backward when `Invert` is enabled. After a Playlist action changes or browses a playlist, Play/Pause, Next, and Previous are routed to the active playlist. For Play/Pause, `Long press ms` controls how long the button must be held to send Stop instead of Play/Pause, defaulting to 800 ms. `Now template` is a multiline template for the Now Playing generated image text; leave it blank for the built-in playlist / artist / title display. Existing templates that use `\n` are also treated as line breaks. `Text align` controls the generated Now Playing image text alignment. `Auto` centers lines that fit within `Max chars` and left-aligns lines that are ellipsized. `Max chars` is a display-width limit before ellipsis; wide Japanese/CJK characters and emoji count wider than ASCII characters.
 
 Build a distributable plugin folder:
 
@@ -171,4 +172,4 @@ The foobar2000 component cannot be built in a non-Windows environment without th
 
 ## Key Images
 
-The Stream Dock plugin uses `setImage` for generated state images. If the component sends an `image` field, that image is used for Now Playing. The component searches the playing file's folder for common cover filenames such as `cover.jpg`, `folder.jpg`, `front.png`, and `album.webp` up to 2 MB. Otherwise, `Art URL` can point to an external album-art service and may use `{artist}` and `{title}` placeholders. When no image source is available, the plugin generates a simple playback-state image.
+The Stream Dock plugin uses `setImage` for generated state images. If the component sends an `image` field, that image is used as the Now Playing artwork background. The component searches the playing file's folder for common cover filenames such as `cover.jpg`, `folder.jpg`, `front.png`, and `album.webp` up to 2 MB. Otherwise, `Art source` can use an original URL template with `{artist}`, `{album}`, and `{title}`, or fetch from iTunes, Spotify, Last.fm, Deezer, or MusicBrainz / Cover Art Archive. Spotify requires Client ID/Secret, and Last.fm requires an API key. When artwork is available, the plugin merges it with the Now Playing text overlay and progress bar. When no image source is available, the plugin generates a simple text-only playback-state image.
