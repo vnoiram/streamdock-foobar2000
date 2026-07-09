@@ -6,14 +6,15 @@ Primary control must go through a custom foobar2000 component, tentatively `foo_
 
 ## Version
 
-Current version: `0.3.0`.
+Current version: `0.3.1`.
 
-Notable `0.3.0` updates:
+Notable `0.3.1` updates:
 
-- Added feature-specific action icons and refreshed the plugin icon.
-- Now Playing defaults to `playlist`, `artist`, and `title`, falling back to the playing file name when tags are empty.
-- Added a component-side `diagnostics` command for the Diagnostics action and Property Inspector check.
-- Simplified Property Inspector settings management to plugin settings import/export.
+- Now Playing no longer renders blank while offline or waiting for the first component state.
+- Action buttons show short titles alongside their feature icons.
+- Mute shows the target action, `Mute` or `Unmute`, from the current component state.
+- Command failures are written to the Stream Dock log with action, command, context, and reason.
+- Rating button and Playlist one-step button movement honor the `Invert` option.
 
 Initial actions:
 
@@ -29,12 +30,13 @@ Initial actions:
 - Track next/previous by knob with configurable tick threshold and press-to-play/pause
 - Playback order command
 - Playlist command
+- Playlist button one-step next/previous when no playlist name or search query is configured
 - Playlist selection, playlist next/previous, and playlist-name search
 - Playlist track browsing: set `Playlist knob` to `Browse tracks`, rotate the Playlist action to choose a track in the active playlist, then press to play it.
 - Playback order cycling
 - Now Playing title template with `{artist}`, `{title}`, `{track}`, `{position}`, `{length}`, `{volume}`, and `{playlist}`
 - Generated Now Playing image progress bar when album art is not available
-- Invert knob direction
+- Invert knob/button direction
 - Min/max volume clamp with absolute component-side volume setting
 - Generated key images for playback, mute, volume, and offline states
 - Optional album-art URL template for Now Playing images, using `{artist}` and `{title}` placeholders
@@ -82,7 +84,7 @@ The plugin defaults to `ws://127.0.0.1:41920`. Change the endpoint in the Proper
 
 The Property Inspector warns when the component endpoint is not localhost because playback commands and now-playing data will be sent to that endpoint. The bundled component is designed to listen only on `127.0.0.1`.
 
-For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for the older playlist-switching behavior. `Now template` overrides the Now Playing title text; leave it blank for the built-in `playlist\nartist\ntitle` display.
+For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for playlist switching. Pressing Playlist with no playlist name or search query configured moves one playlist forward, or backward when `Invert` is enabled. `Now template` overrides the Now Playing title text; leave it blank for the built-in `playlist\nartist\ntitle` display.
 
 Build a distributable plugin folder:
 
