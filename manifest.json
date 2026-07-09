@@ -5,6 +5,7 @@
   "Version": "0.4.0",
   "CodePath": "plugin.html",
   "Icon": "icons/plugin",
+  "CategoryIcon": "icons/plugin",
   "Category": "Foobar2000-Control",
   "OS": [
     {
