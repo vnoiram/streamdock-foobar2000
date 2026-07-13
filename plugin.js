@@ -16,6 +16,7 @@
   var helperSocket = null;
   var reconnectTimer = null;
   var reconnectDelay = 2000;
+  var activeHelperEndpoint = null;
   var pendingRating = null;
   var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', playPauseLongPressMs: 800, rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, albumArtProvider: 'original', albumArtUrlTemplate: '', spotifyClientId: '', spotifyClientSecret: '', lastfmApiKey: '', searchQuery: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
@@ -956,16 +957,27 @@
   }
 
   function connectHelper() {
+    var targetEndpoint = globalSettings.endpoint || DEFAULT_ENDPOINT;
     if (helperSocket && (helperSocket.readyState === WebSocket.OPEN || helperSocket.readyState === WebSocket.CONNECTING)) {
-      return;
+      if (activeHelperEndpoint === targetEndpoint) {
+        return;
+      }
+      var staleSocket = helperSocket;
+      staleSocket.onclose = null;
+      staleSocket.onerror = null;
+      staleSocket.onmessage = null;
+      staleSocket.close();
+      helperSocket = null;
     }
     clearTimeout(reconnectTimer);
-    logMessage('component connecting ' + (globalSettings.endpoint || DEFAULT_ENDPOINT));
-    helperSocket = new WebSocket(globalSettings.endpoint || DEFAULT_ENDPOINT);
+    activeHelperEndpoint = targetEndpoint;
+    logMessage('component connecting ' + targetEndpoint);
+    helperSocket = new WebSocket(targetEndpoint);
 
     helperSocket.onopen = function () {
       lastState.connected = true;
       reconnectDelay = 2000;
+      playlistPlaybackScoped = false;
       logMessage('component connected');
       refreshTitles();
       sendCommand('now_playing');
@@ -1031,6 +1043,9 @@
     }
     var command = ACTION_COMMANDS[action];
     if (command) {
+      if (command === 'stop') {
+        playlistPlaybackScoped = false;
+      }
       if (!sendActionCommand(context, action, command)) {
         showAlert(context);
       }
@@ -1101,6 +1116,7 @@
           return;
         }
         keyPressStates[context].consumed = true;
+        playlistPlaybackScoped = false;
         if (!sendActionCommand(context, action, 'stop')) {
           showAlert(context);
         }
@@ -1309,6 +1325,7 @@
       composedArtPending = {};
       spotifyToken = null;
       spotifyTokenExpiresAt = 0;
+      playlistPlaybackScoped = false;
       refreshTitles();
       connectHelper();
     }
