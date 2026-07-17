@@ -1,5 +1,7 @@
 # streamdock-foobar2000
 
+日本語版はこちら: [README.ja.md](README.ja.md)
+
 Mirabox Stream Dock JavaScript/HTML plugin for controlling foobar2000 through a localhost integration.
 
 Primary control must go through a custom foobar2000 component, tentatively `foo_streamdock_control`, over localhost WebSocket or HTTP. Hotkey simulation is fallback-only.
