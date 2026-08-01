@@ -8,13 +8,16 @@ Primary control must go through a custom foobar2000 component, tentatively `foo_
 
 ## Version
 
-Current version: `0.5.0`.
+Current version: `0.5.1`.
+
+Notable `0.5.1` updates:
+
+- Now Playing images are only sent to Stream Dock when the rendered image changes, and the previous artwork render is kept visible while an updated artwork image is being composed.
 
 Notable `0.5.0` updates:
 
 - Play/Pause supports configurable long-press stop, defaulting to 800 ms.
 - Now Playing album art can be resolved from an original URL template, iTunes, Spotify, Last.fm, Deezer, or MusicBrainz / Cover Art Archive and merged with the Now Playing text overlay.
-- Now Playing images are only sent to Stream Dock when the rendered image changes, and the previous artwork render is kept visible while an updated artwork image is being composed.
 - Playlist knob press starts playback in the active playlist, and Play/Pause, Next, and Previous can follow the playlist selected by Playlist controls.
 - Now Playing templates support `{album}`.
 - The bundled `foo_streamdock_control` component reports version `0.5.0`.
