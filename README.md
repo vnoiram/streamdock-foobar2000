@@ -14,6 +14,7 @@ Notable `0.5.0` updates:
 
 - Play/Pause supports configurable long-press stop, defaulting to 800 ms.
 - Now Playing album art can be resolved from an original URL template, iTunes, Spotify, Last.fm, Deezer, or MusicBrainz / Cover Art Archive and merged with the Now Playing text overlay.
+- Now Playing images are only sent to Stream Dock when the rendered image changes, and the previous artwork render is kept visible while an updated artwork image is being composed.
 - Playlist knob press starts playback in the active playlist, and Play/Pause, Next, and Previous can follow the playlist selected by Playlist controls.
 - Now Playing templates support `{album}`.
 - The bundled `foo_streamdock_control` component reports version `0.5.0`.
@@ -40,6 +41,7 @@ Initial actions:
 - Playback order cycling
 - Now Playing title template with `{artist}`, `{album}`, `{title}`, `{track}`, `{position}`, `{length}`, `{volume}`, and `{playlist}`
 - Now Playing generated image text alignment and per-line character limit
+- Now Playing image updates are deduplicated to avoid unnecessary redraws.
 - Generated Now Playing image progress bar when album art is not available
 - Invert knob/button direction
 - Min/max volume clamp with absolute component-side volume setting

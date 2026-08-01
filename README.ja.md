@@ -12,6 +12,7 @@ localhost integration を通じて foobar2000 を制御する Mirabox Stream Doc
 
 - Play/Pause は configurable long-press stop をサポートし、既定は 800 ms。
 - Now Playing album art は original URL template、iTunes、Spotify、Last.fm、Deezer、MusicBrainz / Cover Art Archive から解決でき、Now Playing text overlay と merge できます。
+- Now Playing image は描画結果が変わった場合だけ Stream Dock に送信し、artwork 更新の合成中は前回の artwork 描画を表示し続けます。
 - Playlist knob press は active playlist で playback を開始し、Play/Pause、Next、Previous は Playlist control で選択した playlist に追従できます。
 - Now Playing template は `{album}` をサポート。
 - bundled `foo_streamdock_control` component は version `0.5.0` を報告。
@@ -37,6 +38,7 @@ localhost integration を通じて foobar2000 を制御する Mirabox Stream Doc
 - playback order cycling
 - `{artist}`, `{album}`, `{title}`, `{track}`, `{position}`, `{length}`, `{volume}`, `{playlist}` を使う Now Playing title template
 - Now Playing generated image text alignment と per-line character limit
+- Now Playing image update は重複送信を抑制し、不要な再描画を避けます。
 - album art がない場合の generated Now Playing image progress bar
 - knob/button direction inversion
 - min/max volume clamp と component-side absolute volume setting

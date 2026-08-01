@@ -27,6 +27,8 @@
   var artPending = {};
   var composedArtCache = {};
   var composedArtPending = {};
+  var lastImages = {};
+  var lastComposedArtByArtwork = {};
   var spotifyToken = null;
   var spotifyTokenExpiresAt = 0;
   var lastState = { connected: false };
@@ -62,7 +64,8 @@
   }
 
   function setImage(context, image) {
-    if (context && image) {
+    if (context && image && lastImages[context] !== image) {
+      lastImages[context] = image;
       sendToStreamDock({ event: 'setImage', context: context, payload: { image: image, target: 0, state: 0 } });
     }
   }
@@ -257,10 +260,14 @@
       if (Object.prototype.hasOwnProperty.call(composedArtCache, renderKey)) {
         return composedArtCache[renderKey] || nowPlayingTextOnlyImage();
       }
+      var artworkKey = nowPlayingArtworkCacheKey(artwork);
       if (!composedArtPending[renderKey]) {
         composedArtPending[renderKey] = true;
         composeNowPlayingArtwork(artwork).then(function (image) {
           composedArtCache[renderKey] = image || '';
+          if (image) {
+            lastComposedArtByArtwork[artworkKey] = image;
+          }
           delete composedArtPending[renderKey];
           refreshNowPlayingImages();
         }).catch(function (error) {
@@ -270,7 +277,7 @@
           refreshNowPlayingImages();
         });
       }
-      return nowPlayingTextOnlyImage();
+      return lastComposedArtByArtwork[artworkKey] || nowPlayingTextOnlyImage();
     }
     return nowPlayingTextOnlyImage();
   }
@@ -306,11 +313,17 @@
 
   function nowPlayingArtworkRenderKey(artwork) {
     return [
-      artCacheKey(albumArtProvider()) || 'local',
-      String(artwork || '').slice(0, 80),
-      String(artwork || '').length,
+      nowPlayingArtworkCacheKey(artwork),
       Math.round(nowPlayingFillPercent()),
       nowPlayingText()
+    ].join('|');
+  }
+
+  function nowPlayingArtworkCacheKey(artwork) {
+    return [
+      artCacheKey(albumArtProvider()) || 'local',
+      String(artwork || '').slice(0, 80),
+      String(artwork || '').length
     ].join('|');
   }
 
@@ -1298,6 +1311,7 @@
   function forgetContext(message) {
     if (message.context) {
       clearPlayPausePress(message.context);
+      delete lastImages[message.context];
       delete contexts[message.context];
       delete dialTickAccumulators[message.context];
     }
@@ -1323,6 +1337,7 @@
       artPending = {};
       composedArtCache = {};
       composedArtPending = {};
+      lastComposedArtByArtwork = {};
       spotifyToken = null;
       spotifyTokenExpiresAt = 0;
       playlistPlaybackScoped = false;
