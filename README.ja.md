@@ -6,7 +6,11 @@ localhost integration を通じて foobar2000 を制御する Mirabox Stream Doc
 
 ## バージョン
 
-現在のバージョン: `0.5.1`
+現在のバージョン: `0.5.2`
+
+主な `0.5.2` 更新:
+
+- 現在の volume 表示と、button からの volume 調整または mute 切り替えに対応する Volume Button action を追加。
 
 主な `0.5.1` 更新:
 

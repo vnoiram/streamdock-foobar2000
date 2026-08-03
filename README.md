@@ -8,7 +8,11 @@ Primary control must go through a custom foobar2000 component, tentatively `foo_
 
 ## Version
 
-Current version: `0.5.1`.
+Current version: `0.5.2`.
+
+Notable `0.5.2` updates:
+
+- Added a keypad Volume Button action for displaying current volume and adjusting volume or mute behavior from a button.
 
 Notable `0.5.1` updates:
 
