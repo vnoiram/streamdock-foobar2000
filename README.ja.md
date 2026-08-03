@@ -28,6 +28,7 @@ localhost integration を通じて foobar2000 を制御する Mirabox Stream Doc
 - Next
 - Previous
 - press-to-mute 付き volume knob
+- current volume display と selectable press behavior 付き volume button
 - Mute
 - Now playing display
 - component が timing を報告する場合の now playing position/length display
@@ -45,6 +46,7 @@ localhost integration を通じて foobar2000 を制御する Mirabox Stream Doc
 - album art がない場合の generated Now Playing image progress bar
 - knob/button direction inversion
 - min/max volume clamp と component-side absolute volume setting
+- mute toggle、volume up、volume down を選べる volume button press mode
 - playback、mute、volume、offline state の generated key image
 - `{artist}`, `{album}`, `{title}` placeholder を使う optional album-art URL template
 - iTunes、Spotify、Last.fm、Deezer、MusicBrainz / Cover Art Archive による optional external album-art provider
@@ -80,7 +82,7 @@ plugin の既定 endpoint は `ws://127.0.0.1:41920` です。component port が
 
 component endpoint が localhost でない場合、playback command と now-playing data がその endpoint に送信されるため、Property Inspector は警告します。bundled component は `127.0.0.1` だけで listen するよう設計されています。
 
-Playlist action では、`Playlist knob` を `Browse tracks` にすると active foobar2000 playlist の track を rotation で移動し、press で選択 track を再生します。`Switch playlists` にすると playlist switching になります。Playlist action が playlist を変更または browse した後、Play/Pause、Next、Previous は active playlist に route されます。
+Playlist action では、`Playlist knob` を `Browse tracks` にすると active foobar2000 playlist の track を rotation で移動し、press で選択 track を再生します。`Switch playlists` にすると playlist switching になります。Playlist action が playlist を変更または browse した後、Play/Pause、Next、Previous は active playlist に route されます。Volume Button action は現在の foobar2000 volume を表示し、`Volume press` で press 時に mute toggle、volume up、volume down のどれを実行するか選べます。
 
 Play/Pause では、`Long press ms` が Stop を送るために button を押し続ける時間を制御します。既定は 800 ms です。`Now template` は Now Playing generated image text の multiline template です。空にすると built-in playlist / artist / title display を使います。
 

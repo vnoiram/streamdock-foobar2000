@@ -18,7 +18,7 @@
   var reconnectDelay = 2000;
   var activeHelperEndpoint = null;
   var pendingRating = null;
-  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', playPauseLongPressMs: 800, rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, albumArtProvider: 'original', albumArtUrlTemplate: '', spotifyClientId: '', spotifyClientSecret: '', lastfmApiKey: '', searchQuery: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var globalSettings = { endpoint: DEFAULT_ENDPOINT, volumeStep: 2, volumeButtonAction: 'mute', seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', playPauseLongPressMs: 800, rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, albumArtProvider: 'original', albumArtUrlTemplate: '', spotifyClientId: '', spotifyClientSecret: '', lastfmApiKey: '', searchQuery: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
   var contexts = {};
   var dialTickAccumulators = {};
   var keyPressStates = {};
@@ -115,7 +115,7 @@
       }
       return formatNowPlaying(context);
     }
-    if (action === 'local.streamdock.foobar2000.volume') {
+    if (isVolumeDisplayAction(action)) {
       return formatVolume();
     }
     if (action === 'local.streamdock.foobar2000.trackknob') {
@@ -136,6 +136,7 @@
       'local.streamdock.foobar2000.previous': 'Prev',
       'local.streamdock.foobar2000.next': 'Next',
       'local.streamdock.foobar2000.volume': 'Vol',
+      'local.streamdock.foobar2000.volumebutton': 'Vol',
       'local.streamdock.foobar2000.trackknob': 'Track',
       'local.streamdock.foobar2000.mute': 'Mute',
       'local.streamdock.foobar2000.seek': 'Seek',
@@ -212,6 +213,11 @@
       return 'Vol\n' + Math.round(lastState.volume) + '%';
     }
     return 'Vol';
+  }
+
+  function isVolumeDisplayAction(action) {
+    return action === 'local.streamdock.foobar2000.volume' ||
+      action === 'local.streamdock.foobar2000.volumebutton';
   }
 
   function ratingStars(value) {
@@ -433,7 +439,7 @@
     if (action === 'local.streamdock.foobar2000.mute') {
       return svgIconImage(lastState.muted ? '#22543d' : '#742a2a', '#ffffff', lastState.muted ? 'volume' : 'mute', 0);
     }
-    if (action === 'local.streamdock.foobar2000.volume') {
+    if (isVolumeDisplayAction(action)) {
       return svgIconImage('#234e52', '#ffffff', 'volume', Number(lastState.volume) || 0);
     }
     if (action === 'local.streamdock.foobar2000.trackknob') {
@@ -448,6 +454,8 @@
       'local.streamdock.foobar2000.stop': 'stop',
       'local.streamdock.foobar2000.previous': 'previous',
       'local.streamdock.foobar2000.next': 'next',
+      'local.streamdock.foobar2000.volume': 'volume',
+      'local.streamdock.foobar2000.volumebutton': 'volume',
       'local.streamdock.foobar2000.mute': 'mute',
       'local.streamdock.foobar2000.seek': 'seek',
       'local.streamdock.foobar2000.playbackorder': 'playbackorder',
@@ -1063,9 +1071,9 @@
         showAlert(context);
       }
     } else if (action === 'local.streamdock.foobar2000.volume') {
-      if (!sendActionCommand(context, action, 'mute')) {
-        showAlert(context);
-      }
+      if (!sendActionCommand(context, action, 'mute')) showAlert(context);
+    } else if (action === 'local.streamdock.foobar2000.volumebutton') {
+      if (!sendVolumeButtonCommand(context, action)) showAlert(context);
     } else if (action === 'local.streamdock.foobar2000.playlist') {
       if (globalSettings.playlistDialMode === 'track') {
         command = trackCommand(globalSettings.trackAction);
@@ -1161,6 +1169,26 @@
     var value = Number(globalSettings.playPauseLongPressMs);
     if (!Number.isFinite(value) || value <= 0) value = 800;
     return Math.max(300, Math.min(3000, Math.round(value)));
+  }
+
+  function sendVolumeButtonCommand(context, action) {
+    var mode = String(globalSettings.volumeButtonAction || 'mute').toLowerCase();
+    if (mode === 'up') {
+      return sendVolumeStepCommand(context, action, 1);
+    }
+    if (mode === 'down') {
+      return sendVolumeStepCommand(context, action, -1);
+    }
+    return sendActionCommand(context, action, 'mute');
+  }
+
+  function sendVolumeStepCommand(context, action, direction) {
+    var step = Math.max(1, Math.abs(Number(globalSettings.volumeStep) || 2));
+    if (typeof lastState.volume === 'number') {
+      var nextVolume = clampVolume(Number(lastState.volume) + (direction > 0 ? step : -step));
+      return sendActionCommand(context, action, 'set_volume_percent', { value: Math.round(nextVolume) });
+    }
+    return sendActionCommand(context, action, direction > 0 ? 'volume_up' : 'volume_down', { amount: step });
   }
 
   function handleDialDown(message) {

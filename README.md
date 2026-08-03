@@ -30,6 +30,7 @@ Initial actions:
 - Next
 - Previous
 - Volume knob with press-to-mute
+- Volume button with current-volume display and selectable press behavior
 - Mute
 - Now playing display
 - Now playing position/length display when the component reports timing
@@ -48,6 +49,7 @@ Initial actions:
 - Generated Now Playing image progress bar when album art is not available
 - Invert knob/button direction
 - Min/max volume clamp with absolute component-side volume setting
+- Volume button press mode for mute toggle, volume up, or volume down
 - Generated key images for playback, mute, volume, and offline states
 - Optional album-art URL template for Now Playing images, using `{artist}`, `{album}`, and `{title}` placeholders
 - Optional external album-art providers for Now Playing images: iTunes, Spotify, Last.fm, Deezer, and MusicBrainz / Cover Art Archive. Provider art is merged with the Now Playing text overlay.
@@ -96,7 +98,7 @@ The plugin defaults to `ws://127.0.0.1:41920`. Change the endpoint in the Proper
 
 The Property Inspector warns when the component endpoint is not localhost because playback commands and now-playing data will be sent to that endpoint. The bundled component is designed to listen only on `127.0.0.1`.
 
-For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for playlist switching; pressing the playlist knob starts playback from the active playlist's focused item, or the first item if nothing is focused. Pressing Playlist with no playlist name or search query configured moves one playlist forward, or backward when `Invert` is enabled. After a Playlist action changes or browses a playlist, Play/Pause, Next, and Previous are routed to the active playlist. For Play/Pause, `Long press ms` controls how long the button must be held to send Stop instead of Play/Pause, defaulting to 800 ms. `Now template` is a multiline template for the Now Playing generated image text; leave it blank for the built-in playlist / artist / title display. Existing templates that use `\n` are also treated as line breaks. `Text align` controls the generated Now Playing image text alignment. `Auto` centers lines that fit within `Max chars` and left-aligns lines that are ellipsized. `Max chars` is a display-width limit before ellipsis; wide Japanese/CJK characters and emoji count wider than ASCII characters.
+For the Playlist action, set `Playlist knob` to `Browse tracks` to rotate through tracks in the active foobar2000 playlist and press to play the selected track. Set it to `Switch playlists` for playlist switching; pressing the playlist knob starts playback from the active playlist's focused item, or the first item if nothing is focused. Pressing Playlist with no playlist name or search query configured moves one playlist forward, or backward when `Invert` is enabled. After a Playlist action changes or browses a playlist, Play/Pause, Next, and Previous are routed to the active playlist. For Play/Pause, `Long press ms` controls how long the button must be held to send Stop instead of Play/Pause, defaulting to 800 ms. The Volume Button action shows the current foobar2000 volume and `Volume press` chooses whether pressing it toggles mute, raises volume, or lowers volume. `Now template` is a multiline template for the Now Playing generated image text; leave it blank for the built-in playlist / artist / title display. Existing templates that use `\n` are also treated as line breaks. `Text align` controls the generated Now Playing image text alignment. `Auto` centers lines that fit within `Max chars` and left-aligns lines that are ellipsized. `Max chars` is a display-width limit before ellipsis; wide Japanese/CJK characters and emoji count wider than ASCII characters.
 
 Build a distributable plugin folder:
 

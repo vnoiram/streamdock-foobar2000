@@ -60,6 +60,15 @@
       "PropertyInspectorPath": "property-inspector.html"
     },
     {
+      "UUID": "local.streamdock.foobar2000.volumebutton",
+      "Name": "Volume Button",
+      "Tooltip": "Show foobar2000 volume and press to adjust volume or toggle mute.",
+      "Controllers": ["Keypad"],
+      "Icon": "icons/volume",
+      "States": [{ "Title": "", "Image": "icons/volume" }],
+      "PropertyInspectorPath": "property-inspector.html"
+    },
+    {
       "UUID": "local.streamdock.foobar2000.trackknob",
       "Name": "Track Knob",
       "Tooltip": "Go to the next or previous foobar2000 track with a knob and press to play/pause.",

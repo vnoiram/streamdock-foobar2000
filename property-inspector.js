@@ -4,8 +4,8 @@
   var websocket = null;
   var context = null;
   var currentAction = '';
-  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', playPauseLongPressMs: 800, rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, albumArtProvider: 'original', albumArtUrlTemplate: '', spotifyClientId: '', spotifyClientSecret: '', lastfmApiKey: '', searchQuery: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
-  var SETTING_KEYS = ['endpoint', 'volumeStep', 'seekStepSeconds', 'trackKnobTicks', 'playlistName', 'playlistDialMode', 'trackAction', 'playPauseLongPressMs', 'rating', 'showProgress', 'nowPlayingTemplate', 'nowPlayingTextAlign', 'nowPlayingMaxChars', 'albumArtProvider', 'albumArtUrlTemplate', 'spotifyClientId', 'spotifyClientSecret', 'lastfmApiKey', 'searchQuery', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
+  var settings = { endpoint: 'ws://127.0.0.1:41920', volumeStep: 2, volumeButtonAction: 'mute', seekStepSeconds: 5, trackKnobTicks: 8, playlistName: '', playlistDialMode: 'playlist', trackAction: 'play', playPauseLongPressMs: 800, rating: 5, showProgress: true, nowPlayingTemplate: '', nowPlayingTextAlign: 'auto', nowPlayingMaxChars: 16, albumArtProvider: 'original', albumArtUrlTemplate: '', spotifyClientId: '', spotifyClientSecret: '', lastfmApiKey: '', searchQuery: '', generatedImages: true, invertKnob: false, minVolume: 0, maxVolume: 100 };
+  var SETTING_KEYS = ['endpoint', 'volumeStep', 'volumeButtonAction', 'seekStepSeconds', 'trackKnobTicks', 'playlistName', 'playlistDialMode', 'trackAction', 'playPauseLongPressMs', 'rating', 'showProgress', 'nowPlayingTemplate', 'nowPlayingTextAlign', 'nowPlayingMaxChars', 'albumArtProvider', 'albumArtUrlTemplate', 'spotifyClientId', 'spotifyClientSecret', 'lastfmApiKey', 'searchQuery', 'generatedImages', 'invertKnob', 'minVolume', 'maxVolume'];
   var PLUGIN_SETTING_FIELDS = ['exportSettings', 'importSettingsButton'];
   var DIAGNOSTIC_FIELDS = ['endpoint', 'diagnoseSettings', 'copyDiagnostics'];
   var ACTION_FIELDS = {
@@ -16,6 +16,7 @@
     'local.streamdock.foobar2000.mute': [],
     'local.streamdock.foobar2000.playbackorder': [],
     'local.streamdock.foobar2000.volume': ['volumeStep', 'minVolume', 'maxVolume', 'invertKnob'],
+    'local.streamdock.foobar2000.volumebutton': ['volumeButtonAction', 'volumeStep', 'minVolume', 'maxVolume'],
     'local.streamdock.foobar2000.trackknob': ['trackKnobTicks', 'invertKnob'],
     'local.streamdock.foobar2000.seek': ['seekStepSeconds', 'invertKnob'],
     'local.streamdock.foobar2000.playlist': ['playlistName', 'playlistDialMode', 'trackAction', 'searchQuery', 'invertKnob'],
@@ -35,6 +36,7 @@
     }
     settings.endpoint = document.getElementById('endpoint').value.trim();
     settings.volumeStep = Number(document.getElementById('volumeStep').value) || 2;
+    settings.volumeButtonAction = document.getElementById('volumeButtonAction').value || 'mute';
     settings.minVolume = Number(document.getElementById('minVolume').value) || 0;
     settings.maxVolume = Number(document.getElementById('maxVolume').value) || 100;
     settings.invertKnob = document.getElementById('invertKnob').checked;
@@ -150,6 +152,7 @@
     settings = mergeKnownSettings(mergeKnownSettings({}, settings), next || {});
     document.getElementById('endpoint').value = settings.endpoint;
     document.getElementById('volumeStep').value = settings.volumeStep;
+    document.getElementById('volumeButtonAction').value = settings.volumeButtonAction || 'mute';
     document.getElementById('minVolume').value = settings.minVolume;
     document.getElementById('maxVolume').value = settings.maxVolume;
     document.getElementById('invertKnob').checked = settings.invertKnob === true || settings.invertKnob === 'true';
@@ -305,6 +308,7 @@
   window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('endpoint').addEventListener('input', sendSettings);
     document.getElementById('volumeStep').addEventListener('input', sendSettings);
+    document.getElementById('volumeButtonAction').addEventListener('change', sendSettings);
     document.getElementById('minVolume').addEventListener('input', sendSettings);
     document.getElementById('maxVolume').addEventListener('input', sendSettings);
     document.getElementById('invertKnob').addEventListener('change', sendSettings);
