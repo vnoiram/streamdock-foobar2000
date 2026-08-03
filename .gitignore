@@ -12,3 +12,4 @@ obj/
 .env.*
 !.env.example
 *.log
+.pre-push-check-ignore.md
