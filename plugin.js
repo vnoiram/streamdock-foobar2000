@@ -34,6 +34,7 @@
   var lastState = { connected: false };
   var lastDiagnostics = null;
   var lastStateSummary = '';
+  var streamDockClosing = false;
 
   function parseJson(value, fallback) {
     if (!value) {
@@ -49,6 +50,33 @@
   function sendToStreamDock(message) {
     if (streamDockSocket && streamDockSocket.readyState === WebSocket.OPEN) {
       streamDockSocket.send(JSON.stringify(message));
+    }
+  }
+
+  function shutdownPlugin() {
+    if (streamDockClosing) {
+      return;
+    }
+    streamDockClosing = true;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    Object.keys(keyPressStates).forEach(clearPlayPausePress);
+    if (helperSocket) {
+      helperSocket.onclose = null;
+      helperSocket.onerror = null;
+      helperSocket.onmessage = null;
+      try {
+        helperSocket.close();
+      } catch (error) {
+        // Ignore shutdown close errors.
+      }
+      helperSocket = null;
+    }
+    if (typeof process !== 'undefined' && process && typeof process.exit === 'function') {
+      process.exit(0);
+    }
+    if (typeof window !== 'undefined' && window && typeof window.close === 'function') {
+      window.close();
     }
   }
 
@@ -978,6 +1006,9 @@
   }
 
   function connectHelper() {
+    if (streamDockClosing) {
+      return;
+    }
     var targetEndpoint = globalSettings.endpoint || DEFAULT_ENDPOINT;
     if (helperSocket && (helperSocket.readyState === WebSocket.OPEN || helperSocket.readyState === WebSocket.CONNECTING)) {
       if (activeHelperEndpoint === targetEndpoint) {
@@ -1031,6 +1062,9 @@
     };
 
     helperSocket.onclose = function () {
+      if (streamDockClosing) {
+        return;
+      }
       lastState.connected = false;
       logMessage('component connection closed');
       refreshTitles();
@@ -1383,5 +1417,7 @@
       connectHelper();
     };
     streamDockSocket.onmessage = handleMessage;
+    streamDockSocket.onclose = shutdownPlugin;
+    streamDockSocket.onerror = shutdownPlugin;
   };
 }());
